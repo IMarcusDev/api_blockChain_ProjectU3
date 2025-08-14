@@ -5,41 +5,45 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Entity
-@Table(name = "users_points")
+@Table(name = "users")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class UserPoints {
+public class User {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private String id;
     
-    @Column(name = "user_name")
-    private String userName;
+    @Column(unique = true, nullable = false)
+    private String email;
     
-    @Column(name = "user_surname")
-    private String userSurname;
+    @Column(nullable = false)
+    private String password;
     
-    private Integer points = 0;
+    @Column(name = "first_name", nullable = false)
+    private String firstName;
     
-    @Column(precision = 5, scale = 2)
-    private BigDecimal efficiency = BigDecimal.ZERO;
-    
-    @Enumerated(EnumType.STRING)
-    private Status status = Status.MEDIUM;
+    @Column(name = "last_name", nullable = false)
+    private String lastName;
     
     @Column(name = "avatar_url")
     private String avatarUrl;
     
-    @Column(name = "blockchain_id")
-    private String blockchainId;
+    @Column(name = "is_active")
+    private Boolean isActive = true;
     
-    @Column(name = "chain_hash")
-    private String chainHash;
+    @Column(name = "total_points")
+    private Integer totalPoints = 0;
+    
+    @Column(name = "blocks_mined")
+    private Integer blocksMined = 0;
+    
+    @Column(name = "last_login")
+    private LocalDateTime lastLogin;
     
     @Column(name = "created_at")
     private LocalDateTime createdAt;
@@ -47,12 +51,8 @@ public class UserPoints {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    @Column(name = "user_id", nullable = false)
-    private String userId;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", insertable = false, updatable = false)
-    private User user;
+    @OneToMany(mappedBy = "minedBy", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private List<Block> minedBlocks;
     
     @PrePersist
     protected void onCreate() {
@@ -63,9 +63,5 @@ public class UserPoints {
     @PreUpdate
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
-    }
-    
-    public enum Status {
-        HIGH, MEDIUM, LOW
     }
 }

@@ -53,6 +53,12 @@ public class Block {
     
     @OneToMany(mappedBy = "blockId", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<BlockData> blockDataList;
+
+    @Column(name = "mined_by")
+    private String minedBy;
+
+    @Column(name = "mining_reward")
+    private Double miningReward = 0.0;
     
     @Transient
     @JsonProperty("data")
