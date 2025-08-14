@@ -1,7 +1,9 @@
 package com.proyecto.mjcd_software.service;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.proyecto.mjcd_software.exception.BlockchainException;
@@ -16,7 +18,9 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 
+@Slf4j
 @Service
+@Transactional
 public class FileProcessingService {
     
     @Autowired
@@ -30,24 +34,31 @@ public class FileProcessingService {
         "text/plain"
     );
     
-    private static final long MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    private static final long MAX_FILE_SIZE = 10 * 1024 * 1024;
     
     public Block processFileUpload(FileUploadRequest request, String blockchainId) {
         MultipartFile file = request.getFile();
         String comment = request.getComment();
+        
+        log.info("Procesando archivo: {} ({})", file.getOriginalFilename(), file.getContentType());
+        
         validateFile(file);
         
         try {
             byte[] fileBytes = file.getBytes();
             String fileHash = HashGenerator.generateSHA256(new String(fileBytes));
             
+            log.debug("Hash del archivo calculado: {}", fileHash);
+            
             Block newBlock = createFileBlock(blockchainId, fileHash, comment);
             
             saveFileData(newBlock.getId(), file, fileHash, comment);
             
+            log.info("Archivo procesado exitosamente en bloque: {}", newBlock.getId());
             return newBlock;
             
         } catch (IOException e) {
+            log.error("Error al procesar archivo {}: {}", file.getOriginalFilename(), e.getMessage());
             throw new BlockchainException("Error al procesar el archivo: " + e.getMessage());
         }
     }
@@ -58,17 +69,35 @@ public class FileProcessingService {
         }
         
         if (file.getSize() > MAX_FILE_SIZE) {
+            log.warn("Archivo rechazado por tamaño: {} bytes (máximo: {})", 
+                    file.getSize(), MAX_FILE_SIZE);
             throw new BlockchainException("El archivo excede el tamaño máximo permitido (10MB)");
         }
         
         String contentType = file.getContentType();
         if (!ALLOWED_TYPES.contains(contentType)) {
+            log.warn("Tipo de archivo rechazado: {}", contentType);
             throw new BlockchainException("Tipo de archivo no permitido. Solo se permiten PDF y TXT");
         }
+
+        String filename = file.getOriginalFilename();
+        if (filename == null || filename.trim().isEmpty()) {
+            throw new BlockchainException("El archivo debe tener un nombre válido");
+        }
+
+        if (filename.contains("..") || filename.contains("/") || filename.contains("\\")) {
+            throw new BlockchainException("Nombre de archivo no válido");
+        }
+        
+        log.debug("Archivo validado exitosamente: {} ({} bytes)", filename, file.getSize());
     }
     
     private String getUserFromRequest() {
-        return SecurityUtils.getCurrentUserId();
+        String userId = SecurityUtils.getCurrentUserId();
+        if (userId == null) {
+            throw new BlockchainException("Usuario no autenticado");
+        }
+        return userId;
     }
 
     private Block createFileBlock(String blockchainId, String fileHash, String comment) {
@@ -105,27 +134,41 @@ public class FileProcessingService {
         fileData.setFileSize(file.getSize());
         fileData.setFileMimeType(file.getContentType());
         blockDataRepository.save(fileData);
-        
+
         if (comment != null && !comment.trim().isEmpty()) {
             BlockData commentData = new BlockData();
             commentData.setBlockId(blockId);
             commentData.setDataType(BlockData.DataType.TEXT);
-            commentData.setContent(comment);
-            commentData.setContentHash(HashGenerator.generateSHA256(comment));
+            commentData.setContent(comment.trim());
+            commentData.setContentHash(HashGenerator.generateSHA256(comment.trim()));
             blockDataRepository.save(commentData);
         }
+        
+        log.debug("Datos del archivo guardados para bloque: {}", blockId);
     }
     
     public String extractTextFromFile(MultipartFile file) throws IOException {
-        if ("text/plain".equals(file.getContentType())) {
-            return new String(file.getBytes());
-        } else if ("application/pdf".equals(file.getContentType())) {
-            return "PDF_CONTENT_HASH_" + HashGenerator.generateSHA256(new String(file.getBytes()));
+        validateFile(file);
+        
+        String contentType = file.getContentType();
+        log.debug("Extrayendo texto de archivo tipo: {}", contentType);
+        
+        if ("text/plain".equals(contentType)) {
+            String content = new String(file.getBytes());
+            log.debug("Texto extraído: {} caracteres", content.length());
+            return content;
+        } else if ("application/pdf".equals(contentType)) {
+            String pdfHash = "PDF_CONTENT_HASH_" + HashGenerator.generateSHA256(new String(file.getBytes()));
+            log.debug("Hash PDF generado: {}", pdfHash);
+            return pdfHash;
         }
+        
         throw new BlockchainException("Tipo de archivo no soportado para extracción de texto");
     }
     
     public boolean isValidFileType(String contentType) {
-        return ALLOWED_TYPES.contains(contentType);
+        boolean isValid = ALLOWED_TYPES.contains(contentType);
+        log.debug("Validación de tipo de archivo {}: {}", contentType, isValid);
+        return isValid;
     }
 }

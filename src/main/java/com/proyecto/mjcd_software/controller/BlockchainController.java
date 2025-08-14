@@ -12,6 +12,8 @@ import com.proyecto.mjcd_software.model.entity.Block;
 import com.proyecto.mjcd_software.model.entity.Blockchain;
 import com.proyecto.mjcd_software.service.BlockchainService;
 import com.proyecto.mjcd_software.service.BlockService;
+import com.proyecto.mjcd_software.util.SecurityUtils;
+import com.proyecto.mjcd_software.exception.BlockchainException;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -59,6 +61,11 @@ public class BlockchainController {
     public ResponseEntity<Map<String, Object>> createBlockchain(
             @Valid @RequestBody CreateBlockchainRequest request,
             HttpServletRequest httpRequest) {
+
+        String currentUserId = SecurityUtils.getCurrentUserId();
+        if (currentUserId == null) {
+            throw new BlockchainException("Usuario no autenticado");
+        }
         
         String clientIp = getClientIpAddress(httpRequest);
         Blockchain blockchain = blockchainService.createBlockchain(
@@ -79,13 +86,19 @@ public class BlockchainController {
     public ResponseEntity<Map<String, Object>> createTextBlock(
             @Valid @RequestBody CreateBlockRequest request) {
         
+        // Validar que el usuario esté autenticado
+        String currentUserId = SecurityUtils.getCurrentUserId();
+        if (currentUserId == null) {
+            throw new BlockchainException("Usuario no autenticado");
+        }
+        
         String blockchainId = request.getBlockchainId();
         if (blockchainId == null) {
             Blockchain defaultBlockchain = blockchainService.getDefaultBlockchain();
             blockchainId = defaultBlockchain.getId();
         }
         
-        Block newBlock = blockService.createTextBlock(blockchainId, request.getContent());
+        Block newBlock = blockService.createTextBlock(blockchainId, request.getContent(), currentUserId);
         
         return ResponseEntity.ok(Map.of(
             "success", true,

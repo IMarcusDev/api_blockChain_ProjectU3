@@ -1,5 +1,6 @@
 package com.proyecto.mjcd_software.service;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -10,9 +11,11 @@ import com.proyecto.mjcd_software.repository.BlockDataRepository;
 import com.proyecto.mjcd_software.repository.BlockRepository;
 import com.proyecto.mjcd_software.util.Constants;
 import com.proyecto.mjcd_software.util.HashGenerator;
+import com.proyecto.mjcd_software.exception.BlockchainException;
 
+@Slf4j
 @Service
-@Transactional
+@Transactional(readOnly = true)
 public class BlockService {
     
     @Autowired
@@ -24,7 +27,10 @@ public class BlockService {
     @Autowired
     private MiningService miningService;
     
+    @Transactional
     public Block createGenesisBlock(String blockchainId) {
+        log.info("Creando bloque génesis para blockchain: {}", blockchainId);
+        
         Block genesisBlock = new Block();
         genesisBlock.setBlockchainId(blockchainId);
         genesisBlock.setBlockIndex(0);
@@ -42,10 +48,18 @@ public class BlockService {
         genesisData.setContentHash(HashGenerator.generateSHA256(Constants.GENESIS_DATA));
         blockDataRepository.save(genesisData);
         
+        log.info("Bloque génesis creado exitosamente con ID: {}", savedBlock.getId());
         return savedBlock;
     }
 
+    @Transactional
     public Block createTextBlock(String blockchainId, String content, String userId) {
+        log.info("Creando bloque de texto para blockchain: {} por usuario: {}", blockchainId, userId);
+        
+        if (content == null || content.trim().isEmpty()) {
+            throw new BlockchainException("El contenido del bloque no puede estar vacío");
+        }
+        
         String previousHash = getLastBlockHash(blockchainId);
         Integer nextIndex = getNextBlockIndex(blockchainId);
         
@@ -66,53 +80,75 @@ public class BlockService {
         blockData.setContentHash(HashGenerator.generateSHA256(content));
         blockDataRepository.save(blockData);
         
+        log.info("Bloque de texto creado exitosamente: índice {}, hash: {}", 
+                savedBlock.getBlockIndex(), savedBlock.getCurrentHash());
         return savedBlock;
     }
 
+    @Transactional
     public Block createTextBlock(String blockchainId, String content) {
         return createTextBlock(blockchainId, content, null);
     }
     
     public String getBlockMainContent(String blockId) {
+        if (blockId == null) {
+            throw new BlockchainException("ID de bloque no puede ser nulo");
+        }
+        
         return blockDataRepository.findByBlockIdAndDataType(blockId, BlockData.DataType.TEXT)
                 .map(BlockData::getContent)
                 .orElse("Sin contenido");
     }
     
     public String getLastBlockHash(String blockchainId) {
+        if (blockchainId == null) {
+            throw new BlockchainException("ID de blockchain no puede ser nulo");
+        }
+        
         return blockRepository.findTopByBlockchainIdOrderByBlockIndexDesc(blockchainId)
                 .map(Block::getCurrentHash)
                 .orElse(Constants.GENESIS_PREV_HASH);
     }
     
     public Integer getNextBlockIndex(String blockchainId) {
+        if (blockchainId == null) {
+            throw new BlockchainException("ID de blockchain no puede ser nulo");
+        }
+        
         return blockRepository.findTopByBlockchainIdOrderByBlockIndexDesc(blockchainId)
                 .map(block -> block.getBlockIndex() + 1)
                 .orElse(0);
     }
 
+    @Transactional
     public Block mineAndSaveBlock(Block block, String content, String userId) {
         Block minedBlock = miningService.mineBlock(block, content, userId);
-        Block savedBlock = blockRepository.save(minedBlock);
-        return savedBlock;
+        return blockRepository.save(minedBlock);
     }
 
+    @Transactional
     public Block mineAndSaveBlock(Block block, String content) {
         return mineAndSaveBlock(block, content, null);
     }
 
     public Block getBlockById(String blockId) {
+        if (blockId == null) {
+            throw new BlockchainException("ID de bloque no puede ser nulo");
+        }
+        
         return blockRepository.findById(blockId)
-                .orElseThrow(() -> new RuntimeException("Bloque no encontrado con ID: " + blockId));
+                .orElseThrow(() -> new BlockchainException("Bloque no encontrado con ID: " + blockId));
     }
 
     public boolean validateBlock(Block block) {
         if (block == null) {
+            log.warn("Intento de validar bloque nulo");
             return false;
         }
         
         String currentHash = block.getCurrentHash();
         if (currentHash == null) {
+            log.warn("Bloque {} no tiene hash", block.getId());
             return false;
         }
 
@@ -120,13 +156,19 @@ public class BlockService {
         String target = "0".repeat(difficulty);
         
         if (!currentHash.startsWith(target)) {
+            log.warn("Hash del bloque {} no cumple con la dificultad requerida", block.getId());
             return false;
         }
 
         String content = getBlockMainContent(block.getId());
         String regeneratedHash = generateBlockHash(block, content);
         
-        return currentHash.equals(regeneratedHash);
+        boolean isValid = currentHash.equals(regeneratedHash);
+        if (!isValid) {
+            log.warn("Hash regenerado no coincide para bloque {}", block.getId());
+        }
+        
+        return isValid;
     }
 
     private String generateBlockHash(Block block, String content) {

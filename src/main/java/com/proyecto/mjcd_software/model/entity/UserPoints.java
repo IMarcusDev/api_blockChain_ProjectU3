@@ -47,11 +47,8 @@ public class UserPoints {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
-    @Column(name = "user_id", nullable = false)
-    private String userId;
-
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "user_id", insertable = false, updatable = false)
+    @JoinColumn(name = "user_id", nullable = false)
     private User user;
     
     @PrePersist
@@ -63,6 +60,18 @@ public class UserPoints {
     @PreUpdate
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
+    }
+
+    public String getUserId() {
+        return user != null ? user.getId() : null;
+    }
+
+    public void setUserId(String userId) {
+        if (userId != null) {
+            User tempUser = new User();
+            tempUser.setId(userId);
+            this.user = tempUser;
+        }
     }
     
     public enum Status {

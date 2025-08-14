@@ -75,8 +75,7 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Bean
     public MultipartResolver multipartResolver() {
-        StandardServletMultipartResolver resolver = new StandardServletMultipartResolver();
-        return resolver;
+        return new StandardServletMultipartResolver();
     }
 
     @Bean
@@ -103,7 +102,6 @@ class BlockchainApplicationConfig {
         this.miningReward = miningReward;
     }
 
-    // Getters
     public int getDefaultDifficulty() { return defaultDifficulty; }
     public String getGenesisHash() { return genesisHash; }
     public String getInitialSeed() { return initialSeed; }

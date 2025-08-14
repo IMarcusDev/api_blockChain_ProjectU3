@@ -38,27 +38,4 @@ public class DatabaseConfig {
                 .driverClassName(driverClassName)
                 .build();
     }
-
-    @Bean
-    public DatabaseHealthIndicator databaseHealthIndicator(DataSource dataSource) {
-        return new DatabaseHealthIndicator(dataSource);
-    }
-}
-
-class DatabaseHealthIndicator {
-    private final DataSource dataSource;
-
-    public DatabaseHealthIndicator(DataSource dataSource) {
-        this.dataSource = dataSource;
-    }
-
-    public boolean isHealthy() {
-        try {
-            dataSource.getConnection().isValid(5);
-            return true;
-        } catch (Exception e) {
-            System.err.println("Error de conexión a la base de datos: " + e.getMessage());
-            return false;
-        }
-    }
 }

@@ -8,6 +8,8 @@ import com.proyecto.mjcd_software.model.dto.response.ValidationResponse;
 import com.proyecto.mjcd_software.model.entity.Blockchain;
 import com.proyecto.mjcd_software.service.BlockchainService;
 import com.proyecto.mjcd_software.service.ValidationService;
+import com.proyecto.mjcd_software.util.SecurityUtils;
+import com.proyecto.mjcd_software.exception.BlockchainException;
 
 import java.util.Map;
 
@@ -99,6 +101,11 @@ public class ValidationController {
     @PostMapping("/repair")
     public ResponseEntity<Map<String, Object>> repairBlockchain(
             @RequestParam(required = false) String blockchainId) {
+                
+        String currentUserId = SecurityUtils.getCurrentUserId();
+        if (currentUserId == null) {
+            throw new BlockchainException("Usuario no autenticado");
+        }
         
         if (blockchainId == null) {
             Blockchain defaultBlockchain = blockchainService.getDefaultBlockchain();

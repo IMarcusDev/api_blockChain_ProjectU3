@@ -11,6 +11,7 @@ import com.proyecto.mjcd_software.model.entity.Blockchain;
 import com.proyecto.mjcd_software.service.BlockchainService;
 import com.proyecto.mjcd_software.service.FileProcessingService;
 import com.proyecto.mjcd_software.exception.BlockchainException;
+import com.proyecto.mjcd_software.util.SecurityUtils;
 
 import java.util.Map;
 
@@ -30,6 +31,12 @@ public class FileController {
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "comment", required = false) String comment,
             @RequestParam(value = "blockchainId", required = false) String blockchainId) {
+        
+        // Validar que el usuario esté autenticado
+        String currentUserId = SecurityUtils.getCurrentUserId();
+        if (currentUserId == null) {
+            throw new BlockchainException("Usuario no autenticado");
+        }
         
         try {
             if (blockchainId == null) {

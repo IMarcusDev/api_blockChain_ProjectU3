@@ -4,8 +4,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.proyecto.mjcd_software.model.entity.User;
 import com.proyecto.mjcd_software.model.entity.UserPoints;
 import com.proyecto.mjcd_software.repository.UserPointsRepository;
+import com.proyecto.mjcd_software.repository.UserRepository;
 import com.proyecto.mjcd_software.util.HashGenerator;
 
 import java.math.BigDecimal;
@@ -21,6 +23,9 @@ public class UserPointsService {
     
     @Autowired
     private UserPointsRepository userPointsRepository;
+    
+    @Autowired
+    private UserRepository userRepository;
 
     private static final String[] NAMES = {"Marcos", "Juan", "Carlos", "Mateo"};
     private static final String[] SURNAMES = {"Escobar", "Granda", "Ñato", "Sosa"};
@@ -41,12 +46,16 @@ public class UserPointsService {
                 .collect(Collectors.toList());
     }
 
-    public UserPoints createUserPoints(String name, String surname, Integer points, String chainHash) {
+    public UserPoints createUserPoints(String name, String surname, Integer points, String chainHash, String userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new RuntimeException("Usuario no encontrado con ID: " + userId));
+        
         UserPoints userPoints = new UserPoints();
         userPoints.setUserName(name);
         userPoints.setUserSurname(surname);
         userPoints.setPoints(points != null ? points : random.nextInt(100) + 1);
         userPoints.setChainHash(chainHash != null ? chainHash : generateRandomHash());
+        userPoints.setUser(user);
 
         calculateEfficiencyAndStatus(userPoints);
         
@@ -55,8 +64,8 @@ public class UserPointsService {
         return userPointsRepository.save(userPoints);
     }
 
-    public UserPoints updateUserPoints(String userId, Integer newPoints) {
-        UserPoints userPoints = getUserById(userId);
+    public UserPoints updateUserPoints(String userPointsId, Integer newPoints) {
+        UserPoints userPoints = getUserById(userPointsId);
         userPoints.setPoints(newPoints);
         
         calculateEfficiencyAndStatus(userPoints);
@@ -64,23 +73,26 @@ public class UserPointsService {
         return userPointsRepository.save(userPoints);
     }
 
-    public UserPoints getUserById(String userId) {
-        return userPointsRepository.findById(userId)
-                .orElseThrow(() -> new RuntimeException("Usuario no encontrado con ID: " + userId));
+    public UserPoints getUserById(String userPointsId) {
+        return userPointsRepository.findById(userPointsId)
+                .orElseThrow(() -> new RuntimeException("UserPoints no encontrado con ID: " + userPointsId));
     }
 
     public List<UserPoints> generateRandomUsers(int count) {
         List<UserPoints> generatedUsers = new ArrayList<>();
+
+        List<User> registeredUsers = userRepository.findByIsActiveTrueOrderByTotalPointsDesc();
         
-        for (int i = 0; i < count; i++) {
+        for (int i = 0; i < count && i < registeredUsers.size(); i++) {
+            User user = registeredUsers.get(i);
             int nameIndex = random.nextInt(NAMES.length);
             String name = NAMES[nameIndex];
             String surname = SURNAMES[nameIndex];
             Integer points = random.nextInt(100) + 1;
             String chainHash = generateRandomHash();
             
-            UserPoints user = createUserPoints(name, surname, points, chainHash);
-            generatedUsers.add(user);
+            UserPoints userPoints = createUserPoints(name, surname, points, chainHash, user.getId());
+            generatedUsers.add(userPoints);
         }
         
         return generatedUsers;
@@ -110,11 +122,12 @@ public class UserPointsService {
             "id", user.getId(),
             "name", user.getUserName(),
             "surname", user.getUserSurname(),
-            "point", user.getPoints(), // Nota: "point" singular como en el frontend
+            "point", user.getPoints(),
             "chain", user.getChainHash(),
             "avatar", user.getAvatarUrl(),
             "status", user.getStatus().name().toLowerCase(),
             "efficiency", user.getEfficiency().doubleValue(),
+            "userId", user.getUserId(),
             "timestamp", user.getCreatedAt() != null ? 
                 user.getCreatedAt().atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli() : 
                 System.currentTimeMillis()

@@ -6,6 +6,8 @@ import org.springframework.web.bind.annotation.*;
 
 import com.proyecto.mjcd_software.model.dto.request.ConfigUpdateRequest;
 import com.proyecto.mjcd_software.service.ConfigService;
+import com.proyecto.mjcd_software.util.SecurityUtils;
+import com.proyecto.mjcd_software.exception.BlockchainException;
 
 import java.util.Map;
 
@@ -30,6 +32,11 @@ public class ConfigController {
 
     @PostMapping("/difficulty")
     public ResponseEntity<Map<String, Object>> updateDifficulty(@RequestBody ConfigUpdateRequest request) {
+        String currentUserId = SecurityUtils.getCurrentUserId();
+        if (currentUserId == null) {
+            throw new BlockchainException("Usuario no autenticado");
+        }
+        
         try {
             int newDifficulty = request.getDifficulty();
             configService.setDifficulty(newDifficulty);
@@ -50,6 +57,11 @@ public class ConfigController {
     
     @PostMapping("/reset")
     public ResponseEntity<Map<String, Object>> resetConfig() {
+        String currentUserId = SecurityUtils.getCurrentUserId();
+        if (currentUserId == null) {
+            throw new BlockchainException("Usuario no autenticado");
+        }
+        
         configService.resetToDefaultDifficulty();
         
         return ResponseEntity.ok(Map.of(

@@ -6,6 +6,8 @@ import org.springframework.web.bind.annotation.*;
 
 import com.proyecto.mjcd_software.model.entity.UserPoints;
 import com.proyecto.mjcd_software.service.UserPointsService;
+import com.proyecto.mjcd_software.util.SecurityUtils;
+import com.proyecto.mjcd_software.exception.BlockchainException;
 
 import java.util.List;
 import java.util.Map;
@@ -26,12 +28,17 @@ public class UserPointsController {
 
     @PostMapping("/points")
     public ResponseEntity<Map<String, Object>> createUserPoints(@RequestBody Map<String, Object> request) {
+        String currentUserId = SecurityUtils.getCurrentUserId();
+        if (currentUserId == null) {
+            throw new BlockchainException("Usuario no autenticado");
+        }
+        
         String name = (String) request.get("name");
         String surname = (String) request.get("surname");
         Integer points = (Integer) request.get("points");
         String chainHash = (String) request.get("chainHash");
         
-        UserPoints userPoints = userPointsService.createUserPoints(name, surname, points, chainHash);
+        UserPoints userPoints = userPointsService.createUserPoints(name, surname, points, chainHash, currentUserId);
         
         return ResponseEntity.ok(Map.of(
             "success", true,
@@ -47,6 +54,11 @@ public class UserPointsController {
     public ResponseEntity<Map<String, Object>> updateUserPoints(
             @PathVariable String userId, 
             @RequestBody Map<String, Object> request) {
+
+        String currentUserId = SecurityUtils.getCurrentUserId();
+        if (currentUserId == null) {
+            throw new BlockchainException("Usuario no autenticado");
+        }
         
         Integer newPoints = (Integer) request.get("points");
         UserPoints updatedUser = userPointsService.updateUserPoints(userId, newPoints);
@@ -69,6 +81,11 @@ public class UserPointsController {
 
     @PostMapping("/generate-random")
     public ResponseEntity<Map<String, Object>> generateRandomUsers(@RequestParam(defaultValue = "5") int count) {
+        String currentUserId = SecurityUtils.getCurrentUserId();
+        if (currentUserId == null) {
+            throw new BlockchainException("Usuario no autenticado");
+        }
+        
         List<UserPoints> generatedUsers = userPointsService.generateRandomUsers(count);
         
         return ResponseEntity.ok(Map.of(
@@ -99,6 +116,11 @@ public class UserPointsController {
 
     @DeleteMapping("/clear")
     public ResponseEntity<Map<String, Object>> clearAllUsers() {
+        String currentUserId = SecurityUtils.getCurrentUserId();
+        if (currentUserId == null) {
+            throw new BlockchainException("Usuario no autenticado");
+        }
+        
         userPointsService.clearAllUsers();
         
         return ResponseEntity.ok(Map.of(
