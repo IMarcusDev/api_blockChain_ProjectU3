@@ -39,18 +39,16 @@ public class WebConfig implements WebMvcConfigurer {
                 .allowedMethods(methods.toArray(new String[0]))
                 .allowedHeaders("*")
                 .allowCredentials(allowCredentials)
-                .maxAge(3600); // Cache preflight response for 1 hour
+                .maxAge(3600);
     }
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        
-        // Configurar orígenes permitidos para el frontend
         configuration.setAllowedOriginPatterns(Arrays.asList(
-            "http://localhost:3000",    // React development server
-            "http://localhost:5173",    // Vite development server
-            "http://127.0.0.1:*"        // Local development
+            "http://localhost:3000",    
+            "http://localhost:5173",    
+            "http://127.0.0.1:*"        
         ));
         
         configuration.setAllowedMethods(Arrays.asList(
@@ -81,7 +79,6 @@ public class WebConfig implements WebMvcConfigurer {
         return resolver;
     }
 
-    // Bean para configuración personalizada de la aplicación blockchain
     @Bean
     public BlockchainApplicationConfig blockchainConfig(
             @Value("${blockchain.config.default-difficulty}") int defaultDifficulty,
@@ -93,7 +90,6 @@ public class WebConfig implements WebMvcConfigurer {
     }
 }
 
-// Clase de configuración personalizada para blockchain
 class BlockchainApplicationConfig {
     private final int defaultDifficulty;
     private final String genesisHash;
