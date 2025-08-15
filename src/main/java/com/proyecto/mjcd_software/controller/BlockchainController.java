@@ -22,7 +22,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/blockchain")
-@CrossOrigin(origins = "*")
 public class BlockchainController {
     
     @Autowired
@@ -32,6 +31,7 @@ public class BlockchainController {
     private BlockService blockService;
 
     @GetMapping("/chain")
+    
     public ResponseEntity<List<BlockResponse>> getBlockchain() {
         Blockchain defaultBlockchain = blockchainService.getDefaultBlockchain();
         List<BlockResponse> chain = blockchainService.getBlockchainData(defaultBlockchain.getId());
@@ -39,6 +39,7 @@ public class BlockchainController {
     }
 
     @GetMapping("/{blockchainId}")
+    
     public ResponseEntity<BlockchainResponse> getBlockchainById(@PathVariable String blockchainId) {
         Blockchain blockchain = blockchainService.getBlockchainById(blockchainId);
         List<BlockResponse> blocks = blockchainService.getBlockchainData(blockchainId);
@@ -58,6 +59,7 @@ public class BlockchainController {
     }
 
     @PostMapping("/create")
+    
     public ResponseEntity<Map<String, Object>> createBlockchain(
             @Valid @RequestBody CreateBlockchainRequest request,
             HttpServletRequest httpRequest) {
@@ -83,10 +85,10 @@ public class BlockchainController {
     }
 
     @PostMapping("/block/text")
+    
     public ResponseEntity<Map<String, Object>> createTextBlock(
             @Valid @RequestBody CreateBlockRequest request) {
         
-        // Validar que el usuario esté autenticado
         String currentUserId = SecurityUtils.getCurrentUserId();
         if (currentUserId == null) {
             throw new BlockchainException("Usuario no autenticado");
@@ -111,6 +113,7 @@ public class BlockchainController {
     }
 
     @GetMapping("/stats")
+    
     public ResponseEntity<Map<String, Object>> getBlockchainStats() {
         Blockchain defaultBlockchain = blockchainService.getDefaultBlockchain();
         Map<String, Object> stats = blockchainService.getBlockchainStats(defaultBlockchain.getId());
@@ -118,6 +121,7 @@ public class BlockchainController {
     }
 
     @GetMapping("/list")
+    
     public ResponseEntity<List<BlockchainResponse>> listActiveBlockchains() {
         List<BlockchainResponse> blockchains = blockchainService.getActiveBlockchains();
         return ResponseEntity.ok(blockchains);

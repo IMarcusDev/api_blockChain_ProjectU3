@@ -17,7 +17,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/file")
-@CrossOrigin(origins = "*")
 public class FileController {
     
     @Autowired
@@ -31,8 +30,7 @@ public class FileController {
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "comment", required = false) String comment,
             @RequestParam(value = "blockchainId", required = false) String blockchainId) {
-        
-        // Validar que el usuario esté autenticado
+
         String currentUserId = SecurityUtils.getCurrentUserId();
         if (currentUserId == null) {
             throw new BlockchainException("Usuario no autenticado");

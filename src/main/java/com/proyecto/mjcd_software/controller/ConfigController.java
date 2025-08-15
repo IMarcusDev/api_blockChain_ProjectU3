@@ -13,7 +13,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/config")
-@CrossOrigin(origins = "*")
 public class ConfigController {
     
     @Autowired

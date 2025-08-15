@@ -34,7 +34,7 @@ public class BlockService {
         Block genesisBlock = new Block();
         genesisBlock.setBlockchainId(blockchainId);
         genesisBlock.setBlockIndex(0);
-        genesisBlock.setPreviousHash(null);
+        genesisBlock.setPreviousHash(Constants.GENESIS_PREV_HASH);
         genesisBlock.setBlockType(Block.BlockType.GENESIS);
         genesisBlock.setTimestamp(System.currentTimeMillis());
 

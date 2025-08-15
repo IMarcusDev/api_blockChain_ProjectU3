@@ -12,7 +12,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/block")
-@CrossOrigin(origins = "*")
 public class BlockController {
     
     @Autowired

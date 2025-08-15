@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import com.proyecto.mjcd_software.model.dto.response.ValidationResponse;
 import com.proyecto.mjcd_software.model.entity.Block;
 import com.proyecto.mjcd_software.repository.BlockRepository;
+import com.proyecto.mjcd_software.util.Constants;
 
 import java.util.List;
 import java.util.ArrayList;
@@ -59,12 +60,13 @@ public class ValidationService {
         String expectedPreviousHash = null;
         
         if (currentBlock.getBlockIndex() == 0) {
-            if (currentBlock.getPreviousHash() == null) {
+            if (currentBlock.getPreviousHash() == null || 
+                Constants.GENESIS_PREV_HASH.equals(currentBlock.getPreviousHash())) {
                 status = "Valid";
                 message = "Bloque génesis válido";
             } else {
                 status = "Invalid";
-                message = "Bloque génesis debe tener previousHash null";
+                message = "Bloque génesis debe tener previousHash null o " + Constants.GENESIS_PREV_HASH;
             }
         } else {
             if (previousBlock != null) {
@@ -124,20 +126,23 @@ public class ValidationService {
             if (!isBlockValid(block)) {
                 return false;
             }
-            
-            if (block.getBlockIndex() > 0) {
-                Block previousBlock = blockRepository.findByBlockchainIdAndBlockIndex(
-                    block.getBlockchainId(), 
-                    block.getBlockIndex() - 1
-                ).orElse(null);
-                
-                if (previousBlock == null) {
-                    return false;
-                }
 
-                if (!block.getPreviousHash().equals(previousBlock.getCurrentHash())) {
-                    return false;
-                }
+            if (block.getBlockIndex() == 0) {
+                return block.getPreviousHash() == null || 
+                       Constants.GENESIS_PREV_HASH.equals(block.getPreviousHash());
+            }
+
+            Block previousBlock = blockRepository.findByBlockchainIdAndBlockIndex(
+                block.getBlockchainId(), 
+                block.getBlockIndex() - 1
+            ).orElse(null);
+            
+            if (previousBlock == null) {
+                return false;
+            }
+
+            if (!block.getPreviousHash().equals(previousBlock.getCurrentHash())) {
+                return false;
             }
             
             return true;

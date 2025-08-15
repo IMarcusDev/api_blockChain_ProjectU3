@@ -1,3 +1,4 @@
+// AuthController.java - Agregar estas anotaciones a TODOS los controladores
 package com.proyecto.mjcd_software.controller;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,7 +18,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/auth")
-@CrossOrigin(origins = "*")
 public class AuthController {
     
     @Autowired
@@ -26,6 +26,8 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<Map<String, Object>> login(@Valid @RequestBody LoginRequest request) {
         try {
+            System.out.println("AuthController - Login request received: " + request.getEmail());
+            
             LoginResponse loginResponse = authService.login(request);
             User user = loginResponse.getUser();
             
@@ -38,21 +40,29 @@ public class AuthController {
                     "email", user.getEmail(),
                     "firstName", user.getFirstName(),
                     "lastName", user.getLastName(),
-                    "avatarUrl", user.getAvatarUrl(),
+                    "avatarUrl", user.getAvatarUrl() != null ? user.getAvatarUrl() : "",
                     "totalPoints", user.getTotalPoints(),
                     "blocksMined", user.getBlocksMined()
                 )
             ));
             
         } catch (BlockchainException e) {
+            System.out.println("AuthController - Login error: " + e.getMessage());
             return ResponseEntity.badRequest().body(Map.of(
                 "success", false,
                 "error", e.getMessage()
+            ));
+        } catch (Exception e) {
+            System.out.println("AuthController - Unexpected error: " + e.getMessage());
+            return ResponseEntity.status(500).body(Map.of(
+                "success", false,
+                "error", "Error interno del servidor"
             ));
         }
     }
     
     @PostMapping("/register")
+    
     public ResponseEntity<Map<String, Object>> register(@Valid @RequestBody RegisterRequest request) {
         try {
             User user = authService.register(request);
@@ -77,6 +87,7 @@ public class AuthController {
     }
     
     @GetMapping("/me")
+    
     public ResponseEntity<Map<String, Object>> getCurrentUser(HttpServletRequest request) {
         try {
             String userId = (String) request.getAttribute("userId");

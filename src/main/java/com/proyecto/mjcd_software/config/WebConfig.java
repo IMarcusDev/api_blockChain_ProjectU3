@@ -12,59 +12,74 @@ import org.springframework.web.multipart.MultipartResolver;
 import org.springframework.web.multipart.support.StandardServletMultipartResolver;
 
 import java.util.Arrays;
-import java.util.List;
 
 @Configuration
 public class WebConfig implements WebMvcConfigurer {
 
-    @Value("${spring.web.cors.allowed-origins}")
-    private String allowedOrigins;
+    @Value("${blockchain.config.default-difficulty}")
+    private int defaultDifficulty;
 
-    @Value("${spring.web.cors.allowed-methods}")
-    private String allowedMethods;
+    @Value("${blockchain.config.genesis-hash}")
+    private String genesisHash;
 
-    @Value("${spring.web.cors.allowed-headers}")
-    private String allowedHeaders;
+    @Value("${blockchain.config.initial-seed}")
+    private String initialSeed;
 
-    @Value("${spring.web.cors.allow-credentials}")
-    private boolean allowCredentials;
+    @Value("${blockchain.config.mining-reward}")
+    private double miningReward;
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
-        List<String> origins = Arrays.asList(allowedOrigins.split(","));
-        List<String> methods = Arrays.asList(allowedMethods.split(","));
-        
         registry.addMapping("/**")
-                .allowedOrigins(origins.toArray(new String[0]))
-                .allowedMethods(methods.toArray(new String[0]))
+                .allowedOrigins(
+                    "http://localhost:3000", 
+                    "http://localhost:5173", 
+                    "http://127.0.0.1:3000", 
+                    "http://127.0.0.1:5173"
+                )
+                .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD")
                 .allowedHeaders("*")
-                .allowCredentials(allowCredentials)
+                .exposedHeaders("Authorization", "Content-Type")
+                .allowCredentials(true) // Necesario para JWT
                 .maxAge(3600);
     }
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(Arrays.asList(
-            "http://localhost:3000",    
-            "http://localhost:5173",    
-            "http://127.0.0.1:*"        
+
+        configuration.setAllowedOrigins(Arrays.asList(
+            "http://localhost:3000",
+            "http://localhost:5173", 
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:5173"
         ));
         
         configuration.setAllowedMethods(Arrays.asList(
-            "GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"
+            "GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH", "HEAD"
         ));
         
+        // Headers permitidos - ESPECÍFICOS en lugar de "*"
         configuration.setAllowedHeaders(Arrays.asList(
-            "Authorization", "Content-Type", "X-Requested-With", 
-            "Accept", "Origin", "Access-Control-Request-Method",
-            "Access-Control-Request-Headers"
+            "Authorization", 
+            "Content-Type", 
+            "X-Requested-With", 
+            "Accept", 
+            "Origin", 
+            "Access-Control-Request-Method",
+            "Access-Control-Request-Headers",
+            "Cache-Control"
         ));
         
+        // Headers expuestos al cliente
         configuration.setExposedHeaders(Arrays.asList(
-            "Access-Control-Allow-Origin", "Access-Control-Allow-Credentials"
+            "Access-Control-Allow-Origin", 
+            "Authorization",
+            "Content-Type",
+            "X-Total-Count"
         ));
-        
+
+        // Permitir credenciales (necesario para JWT en headers)
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
 
@@ -79,12 +94,7 @@ public class WebConfig implements WebMvcConfigurer {
     }
 
     @Bean
-    public BlockchainApplicationConfig blockchainConfig(
-            @Value("${blockchain.config.default-difficulty}") int defaultDifficulty,
-            @Value("${blockchain.config.genesis-hash}") String genesisHash,
-            @Value("${blockchain.config.initial-seed}") String initialSeed,
-            @Value("${blockchain.config.mining-reward}") double miningReward) {
-        
+    public BlockchainApplicationConfig blockchainConfig() {
         return new BlockchainApplicationConfig(defaultDifficulty, genesisHash, initialSeed, miningReward);
     }
 }

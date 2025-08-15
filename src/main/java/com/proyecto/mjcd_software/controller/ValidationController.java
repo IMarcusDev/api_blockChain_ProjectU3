@@ -15,7 +15,6 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/validation")
-@CrossOrigin(origins = "*")
 public class ValidationController {
     
     @Autowired
