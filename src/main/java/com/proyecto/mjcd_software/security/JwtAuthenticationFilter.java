@@ -79,12 +79,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return true;
         }
 
-        return path.startsWith("/api/v1/auth/") || 
-               path.equals("/api/v1/blockchain/chain") ||
-               path.equals("/api/v1/blockchain/stats") ||
-               path.startsWith("/api/v1/validation/") ||
-               path.equals("/api/v1/config") ||
-               path.equals("/api/v1/users/points") ||
-               path.equals("/api/v1/users/stats");
+        return path.startsWith("/auth/") ||
+            path.equals("/blockchain/chain") ||
+            path.equals("/blockchain/stats") ||
+            path.startsWith("/validation/") ||
+            path.equals("/config") ||
+            path.equals("/users/points") ||
+            path.equals("/users/stats");
     }
 }

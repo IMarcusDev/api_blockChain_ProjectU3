@@ -35,37 +35,19 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(authz -> authz
-                // Permitir preflight requests
                 .requestMatchers("OPTIONS", "/**").permitAll()
-                
-                // Endpoints públicos (sin autenticación)
-                .requestMatchers("/auth/**").permitAll()
-                .requestMatchers("/blockchain/chain").permitAll()
-                .requestMatchers("/validation/blockchain").permitAll()
-                .requestMatchers("/validation/block/**").permitAll()
-                .requestMatchers("/validation/integrity").permitAll()
-                .requestMatchers("/validation/simulate").permitAll()
-                .requestMatchers("/block/*/validate").permitAll()
-                .requestMatchers("/blockchain/stats").permitAll()
-                .requestMatchers("/blockchain/list").permitAll()
-                .requestMatchers("/users/points").permitAll()
-                .requestMatchers("/users/stats").permitAll()
-                .requestMatchers("/config").permitAll()
-                .requestMatchers("/file/supported-types").permitAll()
-                
-                // Endpoints que requieren autenticación
-                .requestMatchers("/blockchain/create").authenticated()
-                .requestMatchers("/blockchain/block/**").authenticated()
-                .requestMatchers("/block/**").authenticated()
-                .requestMatchers("/file/**").authenticated()
-                .requestMatchers("/users/generate-random").authenticated()
-                .requestMatchers("/users/clear").authenticated()
-                .requestMatchers("/users/points/**").authenticated() // Para POST/PUT/DELETE
-                .requestMatchers("/config/difficulty").authenticated()
-                .requestMatchers("/config/reset").authenticated()
-                .requestMatchers("/validation/repair").authenticated()
-                
-                // Por defecto, todo lo demás requiere autenticación
+
+                .requestMatchers("/api/v1/auth/**").permitAll()
+                .requestMatchers("/api/v1/blockchain/chain").permitAll()
+                .requestMatchers("/api/v1/validation/**").permitAll()
+                .requestMatchers("/api/v1/blockchain/stats").permitAll()
+                .requestMatchers("/api/v1/blockchain/list").permitAll()
+                .requestMatchers("/api/v1/users/points").permitAll()
+                .requestMatchers("/api/v1/users/stats").permitAll()
+                .requestMatchers("/api/v1/config").permitAll()
+                .requestMatchers("/api/v1/file/supported-types").permitAll()
+                .requestMatchers("/api/v1/mining/**").authenticated()
+
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
