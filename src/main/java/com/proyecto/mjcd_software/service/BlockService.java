@@ -80,6 +80,10 @@ public class BlockService {
         blockData.setContent(content);
         blockData.setContentHash(HashGenerator.generateSHA256(content));
         blockDataRepository.save(blockData);
+
+        if (userId != null) {
+            log.info("Bloque de texto creado exitosamente con puntos de minado incluidos");
+        }
         
         log.info("Bloque de texto creado exitosamente: índice {}, hash: {}", 
                 savedBlock.getBlockIndex(), savedBlock.getCurrentHash());

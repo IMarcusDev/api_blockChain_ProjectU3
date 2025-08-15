@@ -10,10 +10,12 @@ import com.proyecto.mjcd_software.exception.BlockchainException;
 import com.proyecto.mjcd_software.model.entity.Block;
 import com.proyecto.mjcd_software.model.entity.Blockchain;
 import com.proyecto.mjcd_software.model.entity.User;
+import com.proyecto.mjcd_software.model.entity.UserPoints;
 import com.proyecto.mjcd_software.repository.UserRepository;
 import com.proyecto.mjcd_software.service.BlockService;
 import com.proyecto.mjcd_software.service.BlockchainService;
 import com.proyecto.mjcd_software.service.ConfigService;
+import com.proyecto.mjcd_software.service.UserPointsService;
 import com.proyecto.mjcd_software.util.SecurityUtils;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -21,7 +23,8 @@ import jakarta.servlet.http.HttpServletRequest;
 @RestController
 @RequestMapping("/mining")
 public class MiningController {
-    
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(MiningController.class);
+
     @Autowired
     private BlockService blockService;
     
@@ -33,6 +36,9 @@ public class MiningController {
     
     @Autowired
     private ConfigService configService;
+    
+    @Autowired
+    private UserPointsService userPointsService;
 
     @PostMapping("/start")
     public ResponseEntity<Map<String, Object>> startMining(
@@ -55,8 +61,11 @@ public class MiningController {
                 Blockchain defaultBlockchain = blockchainService.getDefaultBlockchain();
                 blockchainId = defaultBlockchain.getId();
             }
+
             Block newBlock = blockService.createTextBlock(blockchainId, content, currentUserId);
+
             User updatedUser = userRepository.findById(currentUserId).orElse(null);
+            UserPoints userPoints = userPointsService.findOrCreateUserPoints(currentUserId);
             
             return ResponseEntity.ok(Map.of(
                 "success", true,
@@ -67,11 +76,16 @@ public class MiningController {
                     "hash", newBlock.getCurrentHash(),
                     "nonce", newBlock.getNonce(),
                     "difficulty", newBlock.getDifficulty(),
-                    "pointsEarned", newBlock.getMiningReward() != null ? newBlock.getMiningReward().intValue() : 0
+                    "pointsEarned", newBlock.getMiningReward() != null ? newBlock.getMiningReward().intValue() : 1
                 ),
                 "user", Map.of(
                     "totalPoints", updatedUser != null ? updatedUser.getTotalPoints() : 0,
                     "blocksMined", updatedUser != null ? updatedUser.getBlocksMined() : 0
+                ),
+                "userPoints", Map.of(
+                    "points", userPoints != null ? userPoints.getPoints() : 0,
+                    "status", userPoints != null ? userPoints.getStatus().name().toLowerCase() : "low",
+                    "efficiency", userPoints != null ? userPoints.getEfficiency().doubleValue() : 0.0
                 )
             ));
             
@@ -92,22 +106,54 @@ public class MiningController {
         
         try {
             User user = userRepository.findById(currentUserId).orElse(null);
+            UserPoints userPoints = userPointsService.findOrCreateUserPoints(currentUserId);
             int currentDifficulty = configService.getDifficulty();
+            
+            int totalPoints = user != null ? user.getTotalPoints() : 0;
+            int blocksMined = user != null ? user.getBlocksMined() : 0;
+
+            double averagePointsPerBlock = blocksMined > 0 ? (double) totalPoints / blocksMined : 0.0;
+            
             Map<String, Object> stats = Map.of(
                 "userStats", Map.of(
-                    "totalPoints", user != null ? user.getTotalPoints() : 0,
-                    "blocksMined", user != null ? user.getBlocksMined() : 0,
-                    "averagePointsPerBlock", user != null && user.getBlocksMined() > 0 ? 
-                        user.getTotalPoints() / user.getBlocksMined() : 0
+                    "totalPoints", totalPoints,
+                    "blocksMined", blocksMined,
+                    "averagePointsPerBlock", Math.round(averagePointsPerBlock * 100.0) / 100.0,
+                    "userPointsTotal", userPoints != null ? userPoints.getPoints() : 0,
+                    "efficiency", userPoints != null ? userPoints.getEfficiency().doubleValue() : 0.0,
+                    "status", userPoints != null ? userPoints.getStatus().name().toLowerCase() : "low"
                 ),
                 "networkStats", Map.of(
                     "currentDifficulty", currentDifficulty,
-                    "estimatedPointsReward", currentDifficulty * 10 + 10,
+                    "estimatedPointsReward", 1,
                     "targetPrefix", "0".repeat(currentDifficulty)
-                )
+                ),
+                "success", true,
+                "timestamp", System.currentTimeMillis()
             );
             
+            
             return ResponseEntity.ok(stats);
+            
+        } catch (Exception e) {
+            log.error("Error obteniendo estadísticas de minado para usuario {}: {}", currentUserId, e.getMessage());
+            return ResponseEntity.badRequest().body(Map.of(
+                "success", false,
+                "error", e.getMessage()
+            ));
+        }
+    }
+    
+    @GetMapping("/leaderboard")
+    public ResponseEntity<Map<String, Object>> getLeaderboard() {
+        try {
+            Map<String, Object> userStats = userPointsService.getUserStats();
+            
+            return ResponseEntity.ok(Map.of(
+                "success", true,
+                "leaderboard", userStats,
+                "message", "Clasificación obtenida exitosamente"
+            ));
             
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of(

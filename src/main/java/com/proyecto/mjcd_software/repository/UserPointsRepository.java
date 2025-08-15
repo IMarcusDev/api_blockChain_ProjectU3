@@ -15,6 +15,8 @@ public interface UserPointsRepository extends JpaRepository<UserPoints, String> 
     List<UserPoints> findAllByOrderByPointsDesc();
     
     Optional<UserPoints> findByUserNameAndUserSurname(String userName, String userSurname);
+
+    Optional<UserPoints> findByUser_Id(String userId);
     
     List<UserPoints> findByStatus(UserPoints.Status status);
     
@@ -26,4 +28,7 @@ public interface UserPointsRepository extends JpaRepository<UserPoints, String> 
     
     @Query("SELECT SUM(u.points) FROM UserPoints u")
     Long findTotalPoints();
+    
+    @Query("SELECT u FROM UserPoints u ORDER BY u.points DESC")
+    List<UserPoints> findTopUsersByPoints();
 }

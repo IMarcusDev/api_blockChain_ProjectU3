@@ -13,6 +13,7 @@ import com.proyecto.mjcd_software.util.HashGenerator;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Random;
 import java.util.stream.Collectors;
 import java.util.ArrayList;
@@ -49,6 +50,10 @@ public class UserPointsService {
     public UserPoints createUserPoints(String name, String surname, Integer points, String chainHash, String userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("Usuario no encontrado con ID: " + userId));
+        Optional<UserPoints> existingUserPoints = userPointsRepository.findByUser_Id(userId);
+        if (existingUserPoints.isPresent()) {
+            throw new RuntimeException("Ya existe un registro de puntos para este usuario");
+        }
         
         UserPoints userPoints = new UserPoints();
         userPoints.setUserName(name);
@@ -80,19 +85,28 @@ public class UserPointsService {
 
     public List<UserPoints> generateRandomUsers(int count) {
         List<UserPoints> generatedUsers = new ArrayList<>();
-
         List<User> registeredUsers = userRepository.findByIsActiveTrueOrderByTotalPointsDesc();
         
-        for (int i = 0; i < count && i < registeredUsers.size(); i++) {
-            User user = registeredUsers.get(i);
+        for (User user : registeredUsers) {
+            if (generatedUsers.size() >= count) break;
+            
+            Optional<UserPoints> existingUserPoints = userPointsRepository.findByUser_Id(user.getId());
+            if (existingUserPoints.isPresent()) {
+                continue;
+            }
+            
             int nameIndex = random.nextInt(NAMES.length);
             String name = NAMES[nameIndex];
             String surname = SURNAMES[nameIndex];
-            Integer points = random.nextInt(100) + 1;
+            Integer points = random.nextInt(20) + 1;
             String chainHash = generateRandomHash();
             
-            UserPoints userPoints = createUserPoints(name, surname, points, chainHash, user.getId());
-            generatedUsers.add(userPoints);
+            try {
+                UserPoints userPoints = createUserPoints(name, surname, points, chainHash, user.getId());
+                generatedUsers.add(userPoints);
+            } catch (Exception e) {
+                System.err.println("Error generando UserPoints para usuario " + user.getId() + ": " + e.getMessage());
+            }
         }
         
         return generatedUsers;
@@ -117,6 +131,25 @@ public class UserPointsService {
         userPointsRepository.deleteAll();
     }
     
+    public UserPoints findOrCreateUserPoints(String userId) {
+        return userPointsRepository.findByUser_Id(userId)
+                .orElseGet(() -> {
+                    User user = userRepository.findById(userId).orElse(null);
+                    if (user == null) return null;
+                    
+                    UserPoints userPoints = new UserPoints();
+                    userPoints.setUser(user);
+                    userPoints.setUserName(user.getFirstName());
+                    userPoints.setUserSurname(user.getLastName());
+                    userPoints.setPoints(0);
+                    userPoints.setAvatarUrl(user.getAvatarUrl());
+                    userPoints.setChainHash(generateRandomHash());
+                    calculateEfficiencyAndStatus(userPoints);
+                    
+                    return userPointsRepository.save(userPoints);
+                });
+    }
+    
     private Map<String, Object> formatUserForFrontend(UserPoints user) {
         return Map.of(
             "id", user.getId(),
@@ -137,12 +170,12 @@ public class UserPointsService {
     private void calculateEfficiencyAndStatus(UserPoints userPoints) {
         Integer points = userPoints.getPoints();
 
-        BigDecimal efficiency = BigDecimal.valueOf((points.doubleValue() / 100.0) * 100.0);
-        userPoints.setEfficiency(efficiency);
+        double efficiency = Math.min(points * 10.0, 100.0);
+        userPoints.setEfficiency(BigDecimal.valueOf(efficiency));
 
-        if (points > 70) {
+        if (points >= 10) {
             userPoints.setStatus(UserPoints.Status.HIGH);
-        } else if (points > 40) {
+        } else if (points >= 5) {
             userPoints.setStatus(UserPoints.Status.MEDIUM);
         } else {
             userPoints.setStatus(UserPoints.Status.LOW);
