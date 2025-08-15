@@ -8,9 +8,10 @@ import com.proyecto.mjcd_software.model.dto.response.ValidationResponse;
 import com.proyecto.mjcd_software.model.entity.Blockchain;
 import com.proyecto.mjcd_software.service.BlockchainService;
 import com.proyecto.mjcd_software.service.ValidationService;
-import com.proyecto.mjcd_software.util.SecurityUtils;
 import com.proyecto.mjcd_software.exception.BlockchainException;
 
+import jakarta.servlet.http.HttpServletRequest;
+import java.util.HashMap;
 import java.util.Map;
 
 @RestController
@@ -40,11 +41,12 @@ public class ValidationController {
     public ResponseEntity<Map<String, Object>> validateBlock(@PathVariable String blockId) {
         boolean isValid = validationService.validateSingleBlock(blockId);
         
-        return ResponseEntity.ok(Map.of(
-            "blockId", blockId,
-            "isValid", isValid,
-            "timestamp", System.currentTimeMillis()
-        ));
+        Map<String, Object> response = new HashMap<>();
+        response.put("blockId", blockId);
+        response.put("isValid", isValid);
+        response.put("timestamp", System.currentTimeMillis());
+        
+        return ResponseEntity.ok(response);
     }
     
     @GetMapping("/integrity")
@@ -59,16 +61,17 @@ public class ValidationController {
         int integrityPercentage = validationService.calculateChainIntegrity(blockchainId);
         ValidationResponse validation = validationService.validateBlockchain(blockchainId);
         
-        return ResponseEntity.ok(Map.of(
-            "blockchainId", blockchainId,
-            "integrityPercentage", integrityPercentage,
-            "isValid", validation.getIsValid(),
-            "totalBlocks", validation.getDetails().size(),
-            "validBlocks", validation.getDetails().stream()
-                .mapToLong(detail -> "Valid".equals(detail.getStatus()) ? 1 : 0)
-                .sum(),
-            "timestamp", System.currentTimeMillis()
-        ));
+        Map<String, Object> response = new HashMap<>();
+        response.put("blockchainId", blockchainId);
+        response.put("integrityPercentage", integrityPercentage);
+        response.put("isValid", validation.getIsValid());
+        response.put("totalBlocks", validation.getDetails().size());
+        response.put("validBlocks", validation.getDetails().stream()
+            .mapToLong(detail -> "Valid".equals(detail.getStatus()) ? 1 : 0)
+            .sum());
+        response.put("timestamp", System.currentTimeMillis());
+        
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/simulate")
@@ -82,29 +85,30 @@ public class ValidationController {
 
         ValidationResponse validation = validationService.validateBlockchain(blockchainId);
         
-        return ResponseEntity.ok(Map.of(
-            "success", true,
-            "message", "Validación completada",
-            "steps", new String[]{
-                "Verificando estructura de bloques...",
-                "Validando hashes...",
-                "Comprobando enlaces entre bloques...",
-                "Verificando timestamps...",
-                "Validación completada"
-            },
-            "result", validation,
-            "timestamp", System.currentTimeMillis()
-        ));
+        String[] steps = {
+            "Verificando estructura de bloques...",
+            "Validando hashes...",
+            "Comprobando enlaces entre bloques...",
+            "Verificando timestamps...",
+            "Validación completada"
+        };
+        
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("message", "Validación completada");
+        response.put("steps", steps);
+        response.put("result", validation);
+        response.put("timestamp", System.currentTimeMillis());
+        
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/repair")
     public ResponseEntity<Map<String, Object>> repairBlockchain(
-            @RequestParam(required = false) String blockchainId) {
+            @RequestParam(required = false) String blockchainId,
+            HttpServletRequest httpRequest) {
                 
-        String currentUserId = SecurityUtils.getCurrentUserId();
-        if (currentUserId == null) {
-            throw new BlockchainException("Usuario no autenticado");
-        }
+        String currentUserId = getCurrentUserId(httpRequest);
         
         if (blockchainId == null) {
             Blockchain defaultBlockchain = blockchainService.getDefaultBlockchain();
@@ -113,12 +117,21 @@ public class ValidationController {
         
         int repairedBlocks = validationService.markInvalidBlocks(blockchainId);
         
-        return ResponseEntity.ok(Map.of(
-            "success", true,
-            "message", "Proceso de reparación completado",
-            "repairedBlocks", repairedBlocks,
-            "blockchainId", blockchainId,
-            "timestamp", System.currentTimeMillis()
-        ));
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("message", "Proceso de reparación completado");
+        response.put("repairedBlocks", repairedBlocks);
+        response.put("blockchainId", blockchainId);
+        response.put("timestamp", System.currentTimeMillis());
+        
+        return ResponseEntity.ok(response);
+    }
+
+    private String getCurrentUserId(HttpServletRequest request) {
+        String userId = (String) request.getAttribute("userId");
+        if (userId == null) {
+            throw new BlockchainException("Usuario no autenticado");
+        }
+        return userId;
     }
 }

@@ -12,11 +12,11 @@ import com.proyecto.mjcd_software.model.entity.Block;
 import com.proyecto.mjcd_software.model.entity.Blockchain;
 import com.proyecto.mjcd_software.service.BlockchainService;
 import com.proyecto.mjcd_software.service.BlockService;
-import com.proyecto.mjcd_software.util.SecurityUtils;
 import com.proyecto.mjcd_software.exception.BlockchainException;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -31,7 +31,6 @@ public class BlockchainController {
     private BlockService blockService;
 
     @GetMapping("/chain")
-    
     public ResponseEntity<List<BlockResponse>> getBlockchain() {
         Blockchain defaultBlockchain = blockchainService.getDefaultBlockchain();
         List<BlockResponse> chain = blockchainService.getBlockchainData(defaultBlockchain.getId());
@@ -39,7 +38,6 @@ public class BlockchainController {
     }
 
     @GetMapping("/{blockchainId}")
-    
     public ResponseEntity<BlockchainResponse> getBlockchainById(@PathVariable String blockchainId) {
         Blockchain blockchain = blockchainService.getBlockchainById(blockchainId);
         List<BlockResponse> blocks = blockchainService.getBlockchainData(blockchainId);
@@ -59,40 +57,34 @@ public class BlockchainController {
     }
 
     @PostMapping("/create")
-    
     public ResponseEntity<Map<String, Object>> createBlockchain(
             @Valid @RequestBody CreateBlockchainRequest request,
             HttpServletRequest httpRequest) {
 
-        String currentUserId = SecurityUtils.getCurrentUserId();
-        if (currentUserId == null) {
-            throw new BlockchainException("Usuario no autenticado");
-        }
-        
+        String currentUserId = getCurrentUserId(httpRequest);
         String clientIp = getClientIpAddress(httpRequest);
+        
         Blockchain blockchain = blockchainService.createBlockchain(
             request.getName(), 
             request.getDescription(), 
             clientIp
         );
         
-        return ResponseEntity.ok(Map.of(
-            "success", true,
-            "message", "Blockchain creada exitosamente",
-            "blockchainId", blockchain.getId(),
-            "name", blockchain.getName()
-        ));
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("message", "Blockchain creada exitosamente");
+        response.put("blockchainId", blockchain.getId());
+        response.put("name", blockchain.getName());
+        
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/block/text")
-    
     public ResponseEntity<Map<String, Object>> createTextBlock(
-            @Valid @RequestBody CreateBlockRequest request) {
+            @Valid @RequestBody CreateBlockRequest request,
+            HttpServletRequest httpRequest) {
         
-        String currentUserId = SecurityUtils.getCurrentUserId();
-        if (currentUserId == null) {
-            throw new BlockchainException("Usuario no autenticado");
-        }
+        String currentUserId = getCurrentUserId(httpRequest);
         
         String blockchainId = request.getBlockchainId();
         if (blockchainId == null) {
@@ -102,18 +94,18 @@ public class BlockchainController {
         
         Block newBlock = blockService.createTextBlock(blockchainId, request.getContent(), currentUserId);
         
-        return ResponseEntity.ok(Map.of(
-            "success", true,
-            "message", "Bloque creado exitosamente",
-            "blockId", newBlock.getId(),
-            "blockIndex", newBlock.getBlockIndex(),
-            "hash", newBlock.getCurrentHash(),
-            "nonce", newBlock.getNonce()
-        ));
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("message", "Bloque creado exitosamente");
+        response.put("blockId", newBlock.getId());
+        response.put("blockIndex", newBlock.getBlockIndex());
+        response.put("hash", newBlock.getCurrentHash());
+        response.put("nonce", newBlock.getNonce());
+        
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/stats")
-    
     public ResponseEntity<Map<String, Object>> getBlockchainStats() {
         Blockchain defaultBlockchain = blockchainService.getDefaultBlockchain();
         Map<String, Object> stats = blockchainService.getBlockchainStats(defaultBlockchain.getId());
@@ -121,12 +113,19 @@ public class BlockchainController {
     }
 
     @GetMapping("/list")
-    
     public ResponseEntity<List<BlockchainResponse>> listActiveBlockchains() {
         List<BlockchainResponse> blockchains = blockchainService.getActiveBlockchains();
         return ResponseEntity.ok(blockchains);
     }
-    
+
+    private String getCurrentUserId(HttpServletRequest request) {
+        String userId = (String) request.getAttribute("userId");
+        if (userId == null) {
+            throw new BlockchainException("Usuario no autenticado");
+        }
+        return userId;
+    }
+
     private String getClientIpAddress(HttpServletRequest request) {
         String xForwardedForHeader = request.getHeader("X-Forwarded-For");
         if (xForwardedForHeader == null) {

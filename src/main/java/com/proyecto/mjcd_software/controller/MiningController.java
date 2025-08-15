@@ -1,5 +1,6 @@
 package com.proyecto.mjcd_software.controller;
 
+import java.util.HashMap;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,7 +17,6 @@ import com.proyecto.mjcd_software.service.BlockService;
 import com.proyecto.mjcd_software.service.BlockchainService;
 import com.proyecto.mjcd_software.service.ConfigService;
 import com.proyecto.mjcd_software.service.UserPointsService;
-import com.proyecto.mjcd_software.util.SecurityUtils;
 
 import jakarta.servlet.http.HttpServletRequest;
 
@@ -45,10 +45,7 @@ public class MiningController {
             @RequestBody Map<String, String> request,
             HttpServletRequest httpRequest) {
         
-        String currentUserId = SecurityUtils.getCurrentUserId();
-        if (currentUserId == null) {
-            throw new BlockchainException("Usuario no autenticado");
-        }
+        String currentUserId = getCurrentUserId(httpRequest);
         
         try {
             String content = request.get("content");
@@ -67,42 +64,43 @@ public class MiningController {
             User updatedUser = userRepository.findById(currentUserId).orElse(null);
             UserPoints userPoints = userPointsService.findOrCreateUserPoints(currentUserId);
             
-            return ResponseEntity.ok(Map.of(
-                "success", true,
-                "message", "Bloque minado exitosamente",
-                "mining", Map.of(
-                    "blockId", newBlock.getId(),
-                    "blockIndex", newBlock.getBlockIndex(),
-                    "hash", newBlock.getCurrentHash(),
-                    "nonce", newBlock.getNonce(),
-                    "difficulty", newBlock.getDifficulty(),
-                    "pointsEarned", newBlock.getMiningReward() != null ? newBlock.getMiningReward().intValue() : 1
-                ),
-                "user", Map.of(
-                    "totalPoints", updatedUser != null ? updatedUser.getTotalPoints() : 0,
-                    "blocksMined", updatedUser != null ? updatedUser.getBlocksMined() : 0
-                ),
-                "userPoints", Map.of(
-                    "points", userPoints != null ? userPoints.getPoints() : 0,
-                    "status", userPoints != null ? userPoints.getStatus().name().toLowerCase() : "low",
-                    "efficiency", userPoints != null ? userPoints.getEfficiency().doubleValue() : 0.0
-                )
-            ));
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Bloque minado exitosamente");
+            
+            Map<String, Object> miningInfo = new HashMap<>();
+            miningInfo.put("blockId", newBlock.getId());
+            miningInfo.put("blockIndex", newBlock.getBlockIndex());
+            miningInfo.put("hash", newBlock.getCurrentHash());
+            miningInfo.put("nonce", newBlock.getNonce());
+            miningInfo.put("difficulty", newBlock.getDifficulty());
+            miningInfo.put("pointsEarned", newBlock.getMiningReward() != null ? newBlock.getMiningReward().intValue() : 1);
+            response.put("mining", miningInfo);
+            
+            Map<String, Object> userInfo = new HashMap<>();
+            userInfo.put("totalPoints", updatedUser != null ? updatedUser.getTotalPoints() : 0);
+            userInfo.put("blocksMined", updatedUser != null ? updatedUser.getBlocksMined() : 0);
+            response.put("user", userInfo);
+            
+            Map<String, Object> userPointsInfo = new HashMap<>();
+            userPointsInfo.put("points", userPoints != null ? userPoints.getPoints() : 0);
+            userPointsInfo.put("status", userPoints != null ? userPoints.getStatus().name().toLowerCase() : "low");
+            userPointsInfo.put("efficiency", userPoints != null ? userPoints.getEfficiency().doubleValue() : 0.0);
+            response.put("userPoints", userPointsInfo);
+            
+            return ResponseEntity.ok(response);
             
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of(
-                "success", false,
-                "error", e.getMessage()
-            ));
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
         }
     }
     
     @GetMapping("/stats")
-    public ResponseEntity<Map<String, Object>> getMiningStats() {
-        String currentUserId = SecurityUtils.getCurrentUserId();
-        if (currentUserId == null) {
-            throw new BlockchainException("Usuario no autenticado");
-        }
+    public ResponseEntity<Map<String, Object>> getMiningStats(HttpServletRequest httpRequest) {
+        String currentUserId = getCurrentUserId(httpRequest);
         
         try {
             User user = userRepository.findById(currentUserId).orElse(null);
@@ -114,33 +112,33 @@ public class MiningController {
 
             double averagePointsPerBlock = blocksMined > 0 ? (double) totalPoints / blocksMined : 0.0;
             
-            Map<String, Object> stats = Map.of(
-                "userStats", Map.of(
-                    "totalPoints", totalPoints,
-                    "blocksMined", blocksMined,
-                    "averagePointsPerBlock", Math.round(averagePointsPerBlock * 100.0) / 100.0,
-                    "userPointsTotal", userPoints != null ? userPoints.getPoints() : 0,
-                    "efficiency", userPoints != null ? userPoints.getEfficiency().doubleValue() : 0.0,
-                    "status", userPoints != null ? userPoints.getStatus().name().toLowerCase() : "low"
-                ),
-                "networkStats", Map.of(
-                    "currentDifficulty", currentDifficulty,
-                    "estimatedPointsReward", 1,
-                    "targetPrefix", "0".repeat(currentDifficulty)
-                ),
-                "success", true,
-                "timestamp", System.currentTimeMillis()
-            );
+            Map<String, Object> userStatsInfo = new HashMap<>();
+            userStatsInfo.put("totalPoints", totalPoints);
+            userStatsInfo.put("blocksMined", blocksMined);
+            userStatsInfo.put("averagePointsPerBlock", Math.round(averagePointsPerBlock * 100.0) / 100.0);
+            userStatsInfo.put("userPointsTotal", userPoints != null ? userPoints.getPoints() : 0);
+            userStatsInfo.put("efficiency", userPoints != null ? userPoints.getEfficiency().doubleValue() : 0.0);
+            userStatsInfo.put("status", userPoints != null ? userPoints.getStatus().name().toLowerCase() : "low");
             
+            Map<String, Object> networkStatsInfo = new HashMap<>();
+            networkStatsInfo.put("currentDifficulty", currentDifficulty);
+            networkStatsInfo.put("estimatedPointsReward", 1);
+            networkStatsInfo.put("targetPrefix", "0".repeat(currentDifficulty));
             
-            return ResponseEntity.ok(stats);
+            Map<String, Object> response = new HashMap<>();
+            response.put("userStats", userStatsInfo);
+            response.put("networkStats", networkStatsInfo);
+            response.put("success", true);
+            response.put("timestamp", System.currentTimeMillis());
+            
+            return ResponseEntity.ok(response);
             
         } catch (Exception e) {
             log.error("Error obteniendo estadísticas de minado para usuario {}: {}", currentUserId, e.getMessage());
-            return ResponseEntity.badRequest().body(Map.of(
-                "success", false,
-                "error", e.getMessage()
-            ));
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
         }
     }
     
@@ -149,20 +147,29 @@ public class MiningController {
         try {
             Map<String, Object> userStats = userPointsService.getUserStats();
             
-            return ResponseEntity.ok(Map.of(
-                "success", true,
-                "leaderboard", userStats,
-                "message", "Clasificación obtenida exitosamente"
-            ));
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("leaderboard", userStats);
+            response.put("message", "Clasificación obtenida exitosamente");
+            
+            return ResponseEntity.ok(response);
             
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of(
-                "success", false,
-                "error", e.getMessage()
-            ));
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
         }
     }
-    
+
+    private String getCurrentUserId(HttpServletRequest request) {
+        String userId = (String) request.getAttribute("userId");
+        if (userId == null) {
+            throw new BlockchainException("Usuario no autenticado");
+        }
+        return userId;
+    }
+
     private String getCurrentUserName(String userId) {
         try {
             User user = userRepository.findById(userId).orElse(null);

@@ -15,15 +15,16 @@ import com.proyecto.mjcd_software.repository.UserRepository;
 import com.proyecto.mjcd_software.service.BlockchainService;
 import com.proyecto.mjcd_software.service.FileProcessingService;
 import com.proyecto.mjcd_software.exception.BlockchainException;
-import com.proyecto.mjcd_software.util.SecurityUtils;
 
+import jakarta.servlet.http.HttpServletRequest;
 import java.util.HashMap;
 import java.util.Map;
 
 @RestController
 @RequestMapping("/file")
 public class FileController {
-    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(MiningController.class);
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(FileController.class);
+    
     @Autowired
     private FileProcessingService fileProcessingService;
     
@@ -36,17 +37,14 @@ public class FileController {
     @Autowired
     private UserPointsRepository userPointsRepository;
 
-
     @PostMapping("/upload")
     public ResponseEntity<Map<String, Object>> uploadFile(
             @RequestParam("file") MultipartFile file,
             @RequestParam(value = "comment", required = false) String comment,
-            @RequestParam(value = "blockchainId", required = false) String blockchainId) {
+            @RequestParam(value = "blockchainId", required = false) String blockchainId,
+            HttpServletRequest httpRequest) {
 
-        String currentUserId = SecurityUtils.getCurrentUserId();
-        if (currentUserId == null) {
-            throw new BlockchainException("Usuario no autenticado");
-        }
+        String currentUserId = getCurrentUserId(httpRequest);
         
         try {
             if (blockchainId == null) {
@@ -68,8 +66,8 @@ public class FileController {
             request.setFile(file);
             request.setComment(comment);
             request.setBlockchainId(blockchainId);
-            
-            Block newBlock = fileProcessingService.processFileUpload(request, blockchainId);
+
+            Block newBlock = fileProcessingService.processFileUpload(request, blockchainId, currentUserId);
 
             User updatedUser = userRepository.findById(currentUserId).orElse(null);
             UserPoints updatedUserPoints = userPointsRepository.findByUser_Id(currentUserId).orElse(null);
@@ -105,16 +103,16 @@ public class FileController {
             
         } catch (BlockchainException e) {
             log.error("Error de blockchain en subida de archivo: {}", e.getMessage());
-            return ResponseEntity.badRequest().body(Map.of(
-                "success", false,
-                "error", e.getMessage()
-            ));
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
         } catch (Exception e) {
             log.error("Error interno en subida de archivo: {}", e.getMessage());
-            return ResponseEntity.internalServerError().body(Map.of(
-                "success", false,
-                "error", "Error interno del servidor: " + e.getMessage()
-            ));
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("error", "Error interno del servidor: " + e.getMessage());
+            return ResponseEntity.internalServerError().body(error);
         }
     }
 
@@ -122,21 +120,23 @@ public class FileController {
     public ResponseEntity<Map<String, Object>> validateFile(@RequestParam("file") MultipartFile file) {
         boolean isValid = fileProcessingService.isValidFileType(file.getContentType());
         
-        return ResponseEntity.ok(Map.of(
-            "isValid", isValid,
-            "filename", file.getOriginalFilename(),
-            "contentType", file.getContentType(),
-            "size", file.getSize()
-        ));
+        Map<String, Object> response = new HashMap<>();
+        response.put("isValid", isValid);
+        response.put("filename", file.getOriginalFilename());
+        response.put("contentType", file.getContentType());
+        response.put("size", file.getSize());
+        
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/supported-types")
     public ResponseEntity<Map<String, Object>> getSupportedFileTypes() {
-        return ResponseEntity.ok(Map.of(
-            "supportedTypes", new String[]{"application/pdf", "text/plain"},
-            "maxSize", "10MB",
-            "description", "Se soportan archivos PDF y TXT con un tamaño máximo de 10MB"
-        ));
+        Map<String, Object> response = new HashMap<>();
+        response.put("supportedTypes", new String[]{"application/pdf", "text/plain"});
+        response.put("maxSize", "10MB");
+        response.put("description", "Se soportan archivos PDF y TXT con un tamaño máximo de 10MB");
+        
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/extract-text")
@@ -144,18 +144,27 @@ public class FileController {
         try {
             String extractedText = fileProcessingService.extractTextFromFile(file);
             
-            return ResponseEntity.ok(Map.of(
-                "success", true,
-                "filename", file.getOriginalFilename(),
-                "extractedText", extractedText,
-                "contentType", file.getContentType()
-            ));
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("filename", file.getOriginalFilename());
+            response.put("extractedText", extractedText);
+            response.put("contentType", file.getContentType());
+            
+            return ResponseEntity.ok(response);
             
         } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of(
-                "success", false,
-                "error", "Error al extraer texto: " + e.getMessage()
-            ));
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("error", "Error al extraer texto: " + e.getMessage());
+            return ResponseEntity.badRequest().body(error);
         }
+    }
+
+    private String getCurrentUserId(HttpServletRequest request) {
+        String userId = (String) request.getAttribute("userId");
+        if (userId == null) {
+            throw new BlockchainException("Usuario no autenticado");
+        }
+        return userId;
     }
 }

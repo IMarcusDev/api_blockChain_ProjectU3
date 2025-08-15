@@ -8,6 +8,7 @@ import com.proyecto.mjcd_software.model.dto.response.BlockResponse;
 import com.proyecto.mjcd_software.model.entity.Block;
 import com.proyecto.mjcd_software.service.BlockService;
 
+import java.util.HashMap;
 import java.util.Map;
 
 @RestController
@@ -41,12 +42,13 @@ public class BlockController {
         String content = blockService.getBlockMainContent(blockId);
         Block block = blockService.getBlockById(blockId);
         
-        return ResponseEntity.ok(Map.of(
-            "blockId", blockId,
-            "content", content,
-            "blockType", block.getBlockType().name().toLowerCase(),
-            "timestamp", block.getTimestamp()
-        ));
+        Map<String, Object> response = new HashMap<>();
+        response.put("blockId", blockId);
+        response.put("content", content);
+        response.put("blockType", block.getBlockType().name().toLowerCase());
+        response.put("timestamp", block.getTimestamp());
+        
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/{blockId}/validate")
@@ -54,12 +56,13 @@ public class BlockController {
         Block block = blockService.getBlockById(blockId);
         boolean isValid = blockService.validateBlock(block);
         
-        return ResponseEntity.ok(Map.of(
-            "blockId", blockId,
-            "isValid", isValid,
-            "hash", block.getCurrentHash(),
-            "previousHash", block.getPreviousHash()
-        ));
+        Map<String, Object> response = new HashMap<>();
+        response.put("blockId", blockId);
+        response.put("isValid", isValid);
+        response.put("hash", block.getCurrentHash());
+        response.put("previousHash", block.getPreviousHash());
+        
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/blockchain/{blockchainId}/last-hash")
@@ -67,10 +70,11 @@ public class BlockController {
         String lastHash = blockService.getLastBlockHash(blockchainId);
         Integer nextIndex = blockService.getNextBlockIndex(blockchainId);
         
-        return ResponseEntity.ok(Map.of(
-            "lastHash", lastHash,
-            "nextIndex", nextIndex,
-            "blockchainId", blockchainId
-        ));
+        Map<String, Object> response = new HashMap<>();
+        response.put("lastHash", lastHash);
+        response.put("nextIndex", nextIndex);
+        response.put("blockchainId", blockchainId);
+        
+        return ResponseEntity.ok(response);
     }
 }

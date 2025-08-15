@@ -16,7 +16,6 @@ import com.proyecto.mjcd_software.repository.BlockDataRepository;
 import com.proyecto.mjcd_software.repository.UserRepository;
 import com.proyecto.mjcd_software.repository.UserPointsRepository;
 import com.proyecto.mjcd_software.util.HashGenerator;
-import com.proyecto.mjcd_software.util.SecurityUtils;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -45,12 +44,13 @@ public class FileProcessingService {
     );
     
     private static final long MAX_FILE_SIZE = 10 * 1024 * 1024;
-    
-    public Block processFileUpload(FileUploadRequest request, String blockchainId) {
+
+    public Block processFileUpload(FileUploadRequest request, String blockchainId, String userId) {
         MultipartFile file = request.getFile();
         String comment = request.getComment();
         
-        log.info("Procesando archivo: {} ({})", file.getOriginalFilename(), file.getContentType());
+        log.info("Procesando archivo: {} ({}) para usuario: {}", 
+                file.getOriginalFilename(), file.getContentType(), userId);
         log.info("Comentario incluido: {}", comment != null && !comment.trim().isEmpty() ? "Sí" : "No");
         
         validateFile(file);
@@ -64,11 +64,10 @@ public class FileProcessingService {
             int pointsToEarn = calculatePointsForUpload(file, comment);
             log.info("Puntos a ganar por esta subida: {}", pointsToEarn);
             
-            Block newBlock = createFileBlock(blockchainId, fileHash, comment);
+            Block newBlock = createFileBlock(blockchainId, fileHash, comment, userId);
             
             saveFileData(newBlock.getId(), file, fileHash, comment);
 
-            String userId = getUserFromRequest();
             rewardUserForUpload(userId, newBlock, pointsToEarn, file, comment);
             
             log.info("Archivo procesado exitosamente en bloque: {} con {} puntos otorgados", 
@@ -106,12 +105,11 @@ public class FileProcessingService {
                 log.warn("Usuario {} no encontrado o inactivo para otorgar recompensa de subida", userId);
                 return;
             }
+
             user.setTotalPoints(user.getTotalPoints() + points);
             userRepository.save(user);
 
-            UserPoints userPoints = userPointsRepository
-                .findByUser_Id(userId)
-                .orElse(null);
+            UserPoints userPoints = userPointsRepository.findByUser_Id(userId).orElse(null);
             
             if (userPoints == null) {
                 userPoints = new UserPoints();
@@ -208,16 +206,8 @@ public class FileProcessingService {
         
         log.debug("Archivo validado exitosamente: {} ({} bytes)", filename, file.getSize());
     }
-    
-    private String getUserFromRequest() {
-        String userId = SecurityUtils.getCurrentUserId();
-        if (userId == null) {
-            throw new BlockchainException("Usuario no autenticado");
-        }
-        return userId;
-    }
 
-    private Block createFileBlock(String blockchainId, String fileHash, String comment) {
+    private Block createFileBlock(String blockchainId, String fileHash, String comment, String userId) {
         String previousHash = blockService.getLastBlockHash(blockchainId);
         Integer nextIndex = blockService.getNextBlockIndex(blockchainId);
         
@@ -238,7 +228,7 @@ public class FileProcessingService {
             miningContent += ":" + comment;
         }
 
-        return blockService.mineAndSaveBlock(newBlock, miningContent, getUserFromRequest());
+        return blockService.mineAndSaveBlock(newBlock, miningContent, userId);
     }
     
     private void saveFileData(String blockId, MultipartFile file, String fileHash, String comment) {

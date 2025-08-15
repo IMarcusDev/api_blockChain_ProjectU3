@@ -1,4 +1,3 @@
-// AuthController.java - Agregar estas anotaciones a TODOS los controladores
 package com.proyecto.mjcd_software.controller;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,6 +13,7 @@ import com.proyecto.mjcd_software.exception.BlockchainException;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import java.util.HashMap;
 import java.util.Map;
 
 @RestController
@@ -26,97 +26,98 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<Map<String, Object>> login(@Valid @RequestBody LoginRequest request) {
         try {
-            System.out.println("AuthController - Login request received: " + request.getEmail());
-            
             LoginResponse loginResponse = authService.login(request);
             User user = loginResponse.getUser();
             
-            return ResponseEntity.ok(Map.of(
-                "success", true,
-                "message", "Login exitoso",
-                "token", loginResponse.getToken(),
-                "user", Map.of(
-                    "id", user.getId(),
-                    "email", user.getEmail(),
-                    "firstName", user.getFirstName(),
-                    "lastName", user.getLastName(),
-                    "avatarUrl", user.getAvatarUrl() != null ? user.getAvatarUrl() : "",
-                    "totalPoints", user.getTotalPoints(),
-                    "blocksMined", user.getBlocksMined()
-                )
-            ));
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Login exitoso");
+            response.put("token", loginResponse.getToken());
+            
+            Map<String, Object> userInfo = new HashMap<>();
+            userInfo.put("id", user.getId());
+            userInfo.put("email", user.getEmail());
+            userInfo.put("firstName", user.getFirstName());
+            userInfo.put("lastName", user.getLastName());
+            userInfo.put("avatarUrl", user.getAvatarUrl() != null ? user.getAvatarUrl() : "");
+            userInfo.put("totalPoints", user.getTotalPoints());
+            userInfo.put("blocksMined", user.getBlocksMined());
+            response.put("user", userInfo);
+            
+            return ResponseEntity.ok(response);
             
         } catch (BlockchainException e) {
-            System.out.println("AuthController - Login error: " + e.getMessage());
-            return ResponseEntity.badRequest().body(Map.of(
-                "success", false,
-                "error", e.getMessage()
-            ));
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
         } catch (Exception e) {
-            System.out.println("AuthController - Unexpected error: " + e.getMessage());
-            return ResponseEntity.status(500).body(Map.of(
-                "success", false,
-                "error", "Error interno del servidor"
-            ));
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("error", "Error interno del servidor");
+            return ResponseEntity.status(500).body(error);
         }
     }
     
     @PostMapping("/register")
-    
     public ResponseEntity<Map<String, Object>> register(@Valid @RequestBody RegisterRequest request) {
         try {
             User user = authService.register(request);
             
-            return ResponseEntity.ok(Map.of(
-                "success", true,
-                "message", "Usuario registrado exitosamente",
-                "user", Map.of(
-                    "id", user.getId(),
-                    "email", user.getEmail(),
-                    "firstName", user.getFirstName(),
-                    "lastName", user.getLastName()
-                )
-            ));
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
+            response.put("message", "Usuario registrado exitosamente");
+            
+            Map<String, Object> userInfo = new HashMap<>();
+            userInfo.put("id", user.getId());
+            userInfo.put("email", user.getEmail());
+            userInfo.put("firstName", user.getFirstName());
+            userInfo.put("lastName", user.getLastName());
+            response.put("user", userInfo);
+            
+            return ResponseEntity.ok(response);
             
         } catch (BlockchainException e) {
-            return ResponseEntity.badRequest().body(Map.of(
-                "success", false,
-                "error", e.getMessage()
-            ));
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("error", e.getMessage());
+            return ResponseEntity.badRequest().body(error);
         }
     }
     
     @GetMapping("/me")
-    
     public ResponseEntity<Map<String, Object>> getCurrentUser(HttpServletRequest request) {
         try {
-            String userId = (String) request.getAttribute("userId");
+            String userId = getCurrentUserId(request);
             String email = (String) request.getAttribute("userEmail");
             String firstName = (String) request.getAttribute("userFirstName");
             String lastName = (String) request.getAttribute("userLastName");
             
-            if (userId == null) {
-                return ResponseEntity.status(401).body(Map.of(
-                    "success", false,
-                    "error", "Token requerido"
-                ));
-            }
+            Map<String, Object> response = new HashMap<>();
+            response.put("success", true);
             
-            return ResponseEntity.ok(Map.of(
-                "success", true,
-                "user", Map.of(
-                    "id", userId,
-                    "email", email,
-                    "firstName", firstName,
-                    "lastName", lastName
-                )
-            ));
+            Map<String, Object> userInfo = new HashMap<>();
+            userInfo.put("id", userId);
+            userInfo.put("email", email);
+            userInfo.put("firstName", firstName);
+            userInfo.put("lastName", lastName);
+            response.put("user", userInfo);
+            
+            return ResponseEntity.ok(response);
             
         } catch (Exception e) {
-            return ResponseEntity.status(401).body(Map.of(
-                "success", false,
-                "error", "Token inválido"
-            ));
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("error", "Token inválido");
+            return ResponseEntity.status(401).body(error);
         }
+    }
+
+    private String getCurrentUserId(HttpServletRequest request) {
+        String userId = (String) request.getAttribute("userId");
+        if (userId == null) {
+            throw new BlockchainException("Usuario no autenticado");
+        }
+        return userId;
     }
 }
