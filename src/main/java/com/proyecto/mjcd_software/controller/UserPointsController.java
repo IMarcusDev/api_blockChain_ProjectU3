@@ -4,79 +4,164 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import com.proyecto.mjcd_software.model.entity.UserPoints;
-import com.proyecto.mjcd_software.service.UserPointsService;
+import com.proyecto.mjcd_software.model.entity.Block;
+import com.proyecto.mjcd_software.model.entity.User;
+import com.proyecto.mjcd_software.repository.BlockRepository;
+import com.proyecto.mjcd_software.repository.UserRepository;
+import com.proyecto.mjcd_software.util.HashGenerator;
 import com.proyecto.mjcd_software.exception.BlockchainException;
 
 import jakarta.servlet.http.HttpServletRequest;
+
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/users")
 public class UserPointsController {
     
     @Autowired
-    private UserPointsService userPointsService;
+    private UserRepository userRepository;
+    
+    @Autowired
+    private BlockRepository blockRepository;
 
     @GetMapping("/points")
     public ResponseEntity<List<Map<String, Object>>> getUsersWithPoints() {
-        List<Map<String, Object>> users = userPointsService.getAllUsersFormatted();
-        return ResponseEntity.ok(users);
+        try {
+            List<User> activeUsers = userRepository.findByIsActiveTrueOrderByTotalPointsDesc();
+            
+            List<Map<String, Object>> formattedUsers = activeUsers.stream()
+                    .map(this::formatUserForFrontend)
+                    .collect(Collectors.toList());
+            
+            return ResponseEntity.ok(formattedUsers);
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+            return ResponseEntity.ok(new ArrayList<>());
+        }
     }
 
-    @PostMapping("/points")
-    public ResponseEntity<Map<String, Object>> createUserPoints(
-            @RequestBody Map<String, Object> request,
-            HttpServletRequest httpRequest) {
+    private Map<String, Object> formatUserForFrontend(User user) {
+        Map<String, Object> formatted = new HashMap<>();
         
-        String currentUserId = getCurrentUserId(httpRequest);
+        formatted.put("id", user.getId());
         
-        String name = (String) request.get("name");
-        String surname = (String) request.get("surname");
-        Integer points = (Integer) request.get("points");
-        String chainHash = (String) request.get("chainHash");
+        formatted.put("name", user.getFirstName());
+        formatted.put("surname", user.getLastName());
+        formatted.put("point", user.getTotalPoints() != null ? user.getTotalPoints() : 0);
+
+        formatted.put("chain", getLastMinedBlockHash(user));
         
-        UserPoints userPoints = userPointsService.createUserPoints(name, surname, points, chainHash, currentUserId);
+        formatted.put("avatar", user.getAvatarUrl() != null ? user.getAvatarUrl() : 
+            generateDefaultAvatar(user.getFirstName(), user.getLastName()));
+
+        formatted.put("status", calculateStatus(user.getTotalPoints()));
+
+        formatted.put("efficiency", calculateEfficiency(user.getTotalPoints()));
+
+        formatted.put("userId", user.getId());
+
+        formatted.put("timestamp", user.getCreatedAt() != null ? 
+            user.getCreatedAt().atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli() : 
+            System.currentTimeMillis());
         
-        Map<String, Object> response = new HashMap<>();
-        response.put("success", true);
-        response.put("message", "Usuario creado exitosamente");
-        response.put("userId", userPoints.getId());
-        response.put("name", userPoints.getUserName());
-        response.put("surname", userPoints.getUserSurname());
-        response.put("points", userPoints.getPoints());
-        
-        return ResponseEntity.ok(response);
+        return formatted;
     }
 
-    @PutMapping("/points/{userId}")
-    public ResponseEntity<Map<String, Object>> updateUserPoints(
-            @PathVariable String userId, 
-            @RequestBody Map<String, Object> request,
-            HttpServletRequest httpRequest) {
+    private String getLastMinedBlockHash(User user) {
+        try {
+            List<Block> userBlocks = blockRepository.findByMinedByOrderByBlockIndexDesc(user.getId());
+            
+            if (!userBlocks.isEmpty()) {
+                Block lastBlock = userBlocks.get(0);
+                return lastBlock.getCurrentHash();
+            }
 
-        String currentUserId = getCurrentUserId(httpRequest);
-        
-        Integer newPoints = (Integer) request.get("points");
-        UserPoints updatedUser = userPointsService.updateUserPoints(userId, newPoints);
-        
-        Map<String, Object> response = new HashMap<>();
-        response.put("success", true);
-        response.put("message", "Puntos actualizados exitosamente");
-        response.put("userId", updatedUser.getId());
-        response.put("points", updatedUser.getPoints());
-        response.put("efficiency", updatedUser.getEfficiency());
-        response.put("status", updatedUser.getStatus().name().toLowerCase());
-        
-        return ResponseEntity.ok(response);
+            List<Block> allBlocks = blockRepository.findTopByOrderByBlockIndexDesc();
+            if (!allBlocks.isEmpty()) {
+                return allBlocks.get(0).getCurrentHash();
+            }
+            
+            return "0000000000000000000000000000000000000000000000000000000000000000";
+            
+        } catch (Exception e) {
+            String data = user.getId() + user.getEmail() + (user.getCreatedAt() != null ? user.getCreatedAt().toString() : "");
+            return HashGenerator.generateSHA256(data);
+        }
+    }
+
+    private String generateDefaultAvatar(String firstName, String lastName) {
+        return String.format(
+            "https://ui-avatars.com/api/?name=%s+%s&background=667eea&color=fff&size=40", 
+            firstName, lastName
+        );
+    }
+
+    private String calculateStatus(Integer points) {
+        if (points == null || points == 0) return "low";
+        if (points >= 10) return "high";
+        if (points >= 5) return "medium";
+        return "low";
+    }
+
+    private double calculateEfficiency(Integer points) {
+        if (points == null || points == 0) return 0.0;
+        return Math.min(points * 10.0, 100.0);
     }
 
     @GetMapping("/stats")
     public ResponseEntity<Map<String, Object>> getUserStats() {
-        Map<String, Object> stats = userPointsService.getUserStats();
-        return ResponseEntity.ok(stats);
+        try {
+            List<User> activeUsers = userRepository.findByIsActiveTrueOrderByTotalPointsDesc();
+            
+            Long totalUsers = (long) activeUsers.size();
+            Long totalPoints = activeUsers.stream()
+                    .mapToLong(user -> user.getTotalPoints() != null ? user.getTotalPoints() : 0)
+                    .sum();
+            
+            Double averagePoints = totalUsers > 0 ? (double) totalPoints / totalUsers : 0.0;
+            
+            Integer maxPoints = activeUsers.stream()
+                    .mapToInt(user -> user.getTotalPoints() != null ? user.getTotalPoints() : 0)
+                    .max()
+                    .orElse(0);
+            
+            Map<String, Object> response = new HashMap<>();
+            response.put("totalUsers", totalUsers);
+            response.put("totalPoints", totalPoints);
+            response.put("averagePoints", Math.round(averagePoints * 100.0) / 100.0);
+            response.put("maxPoints", maxPoints);
+            response.put("timestamp", System.currentTimeMillis());
+            response.put("success", true);
+            
+            return ResponseEntity.ok(response);
+            
+        } catch (Exception e) {
+            Map<String, Object> error = new HashMap<>();
+            error.put("success", false);
+            error.put("error", "Error al obtener estadísticas: " + e.getMessage());
+            return ResponseEntity.badRequest().body(error);
+        }
+    }
+
+    // Resto de endpoints si los necesitas...
+    @DeleteMapping("/clear")
+    public ResponseEntity<Map<String, Object>> clearAllUsers(HttpServletRequest httpRequest) {
+        String currentUserId = getCurrentUserId(httpRequest);
+        
+        // Solo limpiar users_points si existe, pero mantener users
+        // userPointsService.clearAllUsers();
+        
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("message", "Operación no implementada - mantener usuarios principales");
+        
+        return ResponseEntity.ok(response);
     }
 
     @PostMapping("/generate-random")
@@ -86,45 +171,10 @@ public class UserPointsController {
         
         String currentUserId = getCurrentUserId(httpRequest);
         
-        List<UserPoints> generatedUsers = userPointsService.generateRandomUsers(count);
-        
         Map<String, Object> response = new HashMap<>();
         response.put("success", true);
-        response.put("message", "Usuarios generados exitosamente");
-        response.put("count", generatedUsers.size());
-        response.put("users", generatedUsers);
-        
-        return ResponseEntity.ok(response);
-    }
-
-    @GetMapping("/{userId}")
-    public ResponseEntity<Map<String, Object>> getUserById(@PathVariable String userId) {
-        UserPoints user = userPointsService.getUserById(userId);
-        
-        Map<String, Object> response = new HashMap<>();
-        response.put("id", user.getId());
-        response.put("name", user.getUserName());
-        response.put("surname", user.getUserSurname());
-        response.put("points", user.getPoints());
-        response.put("efficiency", user.getEfficiency());
-        response.put("status", user.getStatus().name().toLowerCase());
-        response.put("chainHash", user.getChainHash());
-        response.put("avatarUrl", user.getAvatarUrl());
-        response.put("createdAt", user.getCreatedAt());
-        response.put("updatedAt", user.getUpdatedAt());
-        
-        return ResponseEntity.ok(response);
-    }
-
-    @DeleteMapping("/clear")
-    public ResponseEntity<Map<String, Object>> clearAllUsers(HttpServletRequest httpRequest) {
-        String currentUserId = getCurrentUserId(httpRequest);
-        
-        userPointsService.clearAllUsers();
-        
-        Map<String, Object> response = new HashMap<>();
-        response.put("success", true);
-        response.put("message", "Todos los usuarios han sido eliminados");
+        response.put("message", "Los usuarios ya existen en la tabla principal");
+        response.put("count", 0);
         
         return ResponseEntity.ok(response);
     }

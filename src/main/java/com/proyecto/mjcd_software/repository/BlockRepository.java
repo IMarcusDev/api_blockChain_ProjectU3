@@ -27,4 +27,13 @@ public interface BlockRepository extends JpaRepository<Block, String> {
     
     @Query("SELECT b FROM Block b WHERE b.blockchainId = :blockchainId AND b.isValid = false")
     List<Block> findInvalidBlocksByBlockchainId(@Param("blockchainId") String blockchainId);
+
+    @Query("SELECT b FROM Block b WHERE b.minedBy = :userId ORDER BY b.blockIndex DESC")
+    List<Block> findByMinedByOrderByBlockIndexDesc(@Param("userId") String userId);
+    
+    @Query("SELECT b FROM Block b ORDER BY b.blockIndex DESC")
+    List<Block> findTopByOrderByBlockIndexDesc();
+    
+    @Query("SELECT b FROM Block b WHERE b.minedBy = :userId ORDER BY b.timestamp DESC")
+    List<Block> findByMinedByOrderByTimestampDesc(@Param("userId") String userId);
 }

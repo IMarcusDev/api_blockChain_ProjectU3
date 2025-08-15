@@ -17,6 +17,7 @@ import java.util.Optional;
 import java.util.Random;
 import java.util.stream.Collectors;
 import java.util.ArrayList;
+import java.util.HashMap;
 
 @Service
 @Transactional
@@ -27,24 +28,125 @@ public class UserPointsService {
     
     @Autowired
     private UserRepository userRepository;
-
-    private static final String[] NAMES = {"Marcos", "Juan", "Carlos", "Mateo"};
-    private static final String[] SURNAMES = {"Escobar", "Granda", "Ñato", "Sosa"};
-    private static final String[] AVATAR_URLS = {
-        "https://ui-avatars.com/api/?name=Marcos+Escobar&background=667eea&color=fff&size=40",
-        "https://ui-avatars.com/api/?name=Juan+Granda&background=764ba2&color=fff&size=40",
-        "https://ui-avatars.com/api/?name=Carlos+Nato&background=43e97b&color=fff&size=40",
-        "https://ui-avatars.com/api/?name=Mateo+Sosa&background=f5576c&color=fff&size=40"
-    };
-    
-    private final Random random = new Random();
-    
     public List<Map<String, Object>> getAllUsersFormatted() {
-        List<UserPoints> users = userPointsRepository.findAllByOrderByPointsDesc();
+        try {
+            List<UserPoints> userPointsList = userPointsRepository.findAllByOrderByPointsDesc();
+            
+            if (!userPointsList.isEmpty()) {
+                return userPointsList.stream()
+                        .map(this::formatUserForFrontend)
+                        .collect(Collectors.toList());
+            }
+            List<User> activeUsers = userRepository.findByIsActiveTrueOrderByTotalPointsDesc();
+            List<Map<String, Object>> formattedUsers = new ArrayList<>();
+            
+            for (User user : activeUsers) {
+                if (user.getTotalPoints() != null && user.getTotalPoints() > 0) {
+                    
+                    UserPoints userPoints = userPointsRepository.findByUser_Id(user.getId())
+                            .orElse(null);
+                    
+                    if (userPoints == null) {
+                        userPoints = new UserPoints();
+                        userPoints.setUser(user);
+                        userPoints.setUserName(user.getFirstName());
+                        userPoints.setUserSurname(user.getLastName());
+                        userPoints.setPoints(user.getTotalPoints());
+                        userPoints.setAvatarUrl(user.getAvatarUrl());
+                        userPoints.setChainHash(generateUserChainHash(user));
+                        calculateEfficiencyAndStatus(userPoints);
+                        userPoints = userPointsRepository.save(userPoints);
+                    } else {
+                        if (!userPoints.getPoints().equals(user.getTotalPoints())) {
+                            userPoints.setPoints(user.getTotalPoints());
+                            calculateEfficiencyAndStatus(userPoints);
+                            userPoints = userPointsRepository.save(userPoints);
+                        }
+                    }
+                    
+                    formattedUsers.add(formatUserForFrontend(userPoints));
+                }
+            }
+            
+            formattedUsers.sort((a, b) -> {
+                Integer pointsA = (Integer) a.get("point");
+                Integer pointsB = (Integer) b.get("point");
+                return pointsB.compareTo(pointsA);
+            });
+            
+            return formattedUsers;
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+            return new ArrayList<>();
+        }
+    }
+
+    @Transactional
+    public void syncAllUserPoints() {
+        List<User> activeUsers = userRepository.findByIsActiveTrueOrderByTotalPointsDesc();
         
-        return users.stream()
-                .map(this::formatUserForFrontend)
-                .collect(Collectors.toList());
+        for (User user : activeUsers) {
+            if (user.getTotalPoints() != null && user.getTotalPoints() > 0) {
+                UserPoints userPoints = userPointsRepository.findByUser_Id(user.getId())
+                        .orElse(null);
+                
+                if (userPoints == null) {
+                    userPoints = new UserPoints();
+                    userPoints.setUser(user);
+                    userPoints.setUserName(user.getFirstName());
+                    userPoints.setUserSurname(user.getLastName());
+                    userPoints.setPoints(user.getTotalPoints());
+                    userPoints.setAvatarUrl(user.getAvatarUrl());
+                    userPoints.setChainHash(generateUserChainHash(user));
+                    calculateEfficiencyAndStatus(userPoints);
+                    userPointsRepository.save(userPoints);
+                } else {
+                    userPoints.setPoints(user.getTotalPoints());
+                    userPoints.setUserName(user.getFirstName());
+                    userPoints.setUserSurname(user.getLastName());
+                    calculateEfficiencyAndStatus(userPoints);
+                    userPointsRepository.save(userPoints);
+                }
+            }
+        }
+    }
+
+    private Map<String, Object> formatUserForFrontend(UserPoints userPoints) {
+        Map<String, Object> formatted = new HashMap<>();
+        formatted.put("id", userPoints.getId());
+        formatted.put("name", userPoints.getUserName());
+        formatted.put("surname", userPoints.getUserSurname());
+        formatted.put("point", userPoints.getPoints());
+        formatted.put("chain", userPoints.getChainHash());
+        formatted.put("avatar", userPoints.getAvatarUrl());
+        formatted.put("status", userPoints.getStatus().name().toLowerCase());
+        formatted.put("efficiency", userPoints.getEfficiency().doubleValue());
+        formatted.put("userId", userPoints.getUser() != null ? userPoints.getUser().getId() : null);
+        formatted.put("timestamp", userPoints.getCreatedAt() != null ? 
+            userPoints.getCreatedAt().atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli() : 
+            System.currentTimeMillis());
+        
+        return formatted;
+    }
+
+    private void calculateEfficiencyAndStatus(UserPoints userPoints) {
+        Integer points = userPoints.getPoints();
+        double efficiency = Math.min(points * 10.0, 100.0);
+        userPoints.setEfficiency(BigDecimal.valueOf(efficiency));
+
+        if (points >= 10) {
+            userPoints.setStatus(UserPoints.Status.HIGH);
+        } else if (points >= 5) {
+            userPoints.setStatus(UserPoints.Status.MEDIUM);
+        } else {
+            userPoints.setStatus(UserPoints.Status.LOW);
+        }
+    }
+
+    private String generateUserChainHash(User user) {
+        String data = user.getId() + user.getEmail() + System.currentTimeMillis();
+        return HashGenerator.generateSHA256(data);
     }
 
     public UserPoints createUserPoints(String name, String surname, Integer points, String chainHash, String userId) {
@@ -69,49 +171,6 @@ public class UserPointsService {
         return userPointsRepository.save(userPoints);
     }
 
-    public UserPoints updateUserPoints(String userPointsId, Integer newPoints) {
-        UserPoints userPoints = getUserById(userPointsId);
-        userPoints.setPoints(newPoints);
-        
-        calculateEfficiencyAndStatus(userPoints);
-        
-        return userPointsRepository.save(userPoints);
-    }
-
-    public UserPoints getUserById(String userPointsId) {
-        return userPointsRepository.findById(userPointsId)
-                .orElseThrow(() -> new RuntimeException("UserPoints no encontrado con ID: " + userPointsId));
-    }
-
-    public List<UserPoints> generateRandomUsers(int count) {
-        List<UserPoints> generatedUsers = new ArrayList<>();
-        List<User> registeredUsers = userRepository.findByIsActiveTrueOrderByTotalPointsDesc();
-        
-        for (User user : registeredUsers) {
-            if (generatedUsers.size() >= count) break;
-            
-            Optional<UserPoints> existingUserPoints = userPointsRepository.findByUser_Id(user.getId());
-            if (existingUserPoints.isPresent()) {
-                continue;
-            }
-            
-            int nameIndex = random.nextInt(NAMES.length);
-            String name = NAMES[nameIndex];
-            String surname = SURNAMES[nameIndex];
-            Integer points = random.nextInt(20) + 1;
-            String chainHash = generateRandomHash();
-            
-            try {
-                UserPoints userPoints = createUserPoints(name, surname, points, chainHash, user.getId());
-                generatedUsers.add(userPoints);
-            } catch (Exception e) {
-                System.err.println("Error generando UserPoints para usuario " + user.getId() + ": " + e.getMessage());
-            }
-        }
-        
-        return generatedUsers;
-    }
-
     public Map<String, Object> getUserStats() {
         Double avgPoints = userPointsRepository.findAveragePoints();
         Integer maxPoints = userPointsRepository.findMaxPoints();
@@ -126,11 +185,19 @@ public class UserPointsService {
             "timestamp", System.currentTimeMillis()
         );
     }
+
+    private final Random random = new Random();
     
-    public void clearAllUsers() {
-        userPointsRepository.deleteAll();
+    private String generateRandomHash() {
+        String randomData = "user_" + System.currentTimeMillis() + "_" + random.nextInt(10000);
+        return HashGenerator.generateSHA256(randomData);
     }
-    
+
+    private String generateAvatarUrl(String name, String surname) {
+        return String.format("https://ui-avatars.com/api/?name=%s+%s&background=667eea&color=fff&size=40", 
+                name, surname);
+    }
+
     public UserPoints findOrCreateUserPoints(String userId) {
         return userPointsRepository.findByUser_Id(userId)
                 .orElseGet(() -> {
@@ -141,7 +208,7 @@ public class UserPointsService {
                     userPoints.setUser(user);
                     userPoints.setUserName(user.getFirstName());
                     userPoints.setUserSurname(user.getLastName());
-                    userPoints.setPoints(0);
+                    userPoints.setPoints(user.getTotalPoints() != null ? user.getTotalPoints() : 0);
                     userPoints.setAvatarUrl(user.getAvatarUrl());
                     userPoints.setChainHash(generateRandomHash());
                     calculateEfficiencyAndStatus(userPoints);
@@ -149,61 +216,24 @@ public class UserPointsService {
                     return userPointsRepository.save(userPoints);
                 });
     }
-    
-    private Map<String, Object> formatUserForFrontend(UserPoints user) {
-        return Map.of(
-            "id", user.getId(),
-            "name", user.getUserName(),
-            "surname", user.getUserSurname(),
-            "point", user.getPoints(),
-            "chain", user.getChainHash(),
-            "avatar", user.getAvatarUrl(),
-            "status", user.getStatus().name().toLowerCase(),
-            "efficiency", user.getEfficiency().doubleValue(),
-            "userId", user.getUserId(),
-            "timestamp", user.getCreatedAt() != null ? 
-                user.getCreatedAt().atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli() : 
-                System.currentTimeMillis()
-        );
+
+    public UserPoints updateUserPoints(String userPointsId, Integer newPoints) {
+        UserPoints userPoints = getUserById(userPointsId);
+        userPoints.setPoints(newPoints);
+        calculateEfficiencyAndStatus(userPoints);
+        return userPointsRepository.save(userPoints);
     }
 
-    private void calculateEfficiencyAndStatus(UserPoints userPoints) {
-        Integer points = userPoints.getPoints();
-
-        double efficiency = Math.min(points * 10.0, 100.0);
-        userPoints.setEfficiency(BigDecimal.valueOf(efficiency));
-
-        if (points >= 10) {
-            userPoints.setStatus(UserPoints.Status.HIGH);
-        } else if (points >= 5) {
-            userPoints.setStatus(UserPoints.Status.MEDIUM);
-        } else {
-            userPoints.setStatus(UserPoints.Status.LOW);
-        }
+    public UserPoints getUserById(String userPointsId) {
+        return userPointsRepository.findById(userPointsId)
+                .orElseThrow(() -> new RuntimeException("UserPoints no encontrado con ID: " + userPointsId));
     }
 
-    private String generateRandomHash() {
-        String randomData = "user_" + System.currentTimeMillis() + "_" + random.nextInt(10000);
-        return HashGenerator.generateSHA256(randomData);
+    public void clearAllUsers() {
+        userPointsRepository.deleteAll();
     }
 
-    private String generateAvatarUrl(String name, String surname) {
-        for (int i = 0; i < NAMES.length; i++) {
-            if (NAMES[i].equals(name) && SURNAMES[i].equals(surname)) {
-                return AVATAR_URLS[i];
-            }
-        }
-        
-        return String.format("https://ui-avatars.com/api/?name=%s+%s&background=667eea&color=fff&size=40", 
-                name, surname);
-    }
-
-    public UserPoints findByNameAndSurname(String name, String surname) {
-        return userPointsRepository.findByUserNameAndUserSurname(name, surname)
-                .orElse(null);
-    }
-    
-    public List<UserPoints> getUsersByStatus(UserPoints.Status status) {
-        return userPointsRepository.findByStatus(status);
+    public List<UserPoints> generateRandomUsers(int count) {
+        return new ArrayList<>();
     }
 }
